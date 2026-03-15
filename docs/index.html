@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard GD Brasil - Micro e Minigeração Distribuída</title>
+    <meta name="description" content="Dashboard interativo sobre Micro e Minigeração Distribuída (MMGD) no Brasil. Dados abertos da ANEEL.">
+    <meta property="og:title" content="Dashboard GD Brasil - MMGD">
+    <meta property="og:description" content="Panorama completo da geração distribuída no Brasil com dados ANEEL.">
+    <meta property="og:type" content="website">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #0f1923;
+            --bg-card: #1a2736;
+            --bg-card-hover: #1f3044;
+            --border: #2a3f55;
+            --text: #e0e6ed;
+            --text-muted: #8899aa;
+            --accent: #00d4aa;
+            --accent2: #3b82f6;
+            --accent3: #f59e0b;
+            --accent4: #ef4444;
+            --accent5: #8b5cf6;
+            --green: #10b981;
+            --radius: 12px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #0a1628, #1a2d44);
+            border-bottom: 1px solid var(--border);
+            padding: 20px 24px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .tab-btn {
+            padding: 12px 20px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            cursor: pointer;
+            white-space: nowrap;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { color: var(--text); background: var(--bg-card-hover); }
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            background: var(--bg-card-hover);
+        }
+
+        /* Content */
+        .content { padding: 20px; max-width: 1400px; margin: 0 auto; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+        }
+        .kpi-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--accent);
+            line-height: 1.2;
+        }
+        .kpi-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .kpi-card:nth-child(2) .kpi-value { color: var(--accent2); }
+        .kpi-card:nth-child(3) .kpi-value { color: var(--accent3); }
+        .kpi-card:nth-child(4) .kpi-value { color: var(--green); }
+
+        /* Chart containers */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .chart-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+        }
+        .chart-box.full { grid-column: 1 / -1; }
+        .chart-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+        .chart-wrap { position: relative; height: 320px; }
+        .chart-wrap.tall { height: 450px; }
+        .chart-wrap canvas { max-height: 100%; }
+
+        /* Tables */
+        .table-wrap {
+            overflow-x: auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 24px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        th {
+            background: rgba(0,212,170,0.1);
+            color: var(--accent);
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+            position: sticky;
+            top: 0;
+        }
+        th:hover { background: rgba(0,212,170,0.2); }
+        td {
+            padding: 8px 12px;
+            border-top: 1px solid var(--border);
+        }
+        tr:hover td { background: var(--bg-card-hover); }
+        .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .bar-cell {
+            position: relative;
+        }
+        .bar-fill {
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            background: rgba(0,212,170,0.15);
+            border-radius: 2px;
+        }
+        .bar-cell span { position: relative; z-index: 1; }
+
+        /* Search */
+        .search-box {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 10px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 0.9rem;
+            outline: none;
+        }
+        .search-box input:focus { border-color: var(--accent); }
+        .search-box input::placeholder { color: var(--text-muted); }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .filters select {
+            padding: 8px 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 0.82rem;
+        }
+
+        /* Map container */
+        #map-container { width: 100%; height: 500px; }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .loading::after {
+            content: '';
+            display: block;
+            width: 32px; height: 32px;
+            margin: 16px auto;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+        }
+        .footer a { color: var(--accent); text-decoration: none; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .chart-grid { grid-template-columns: 1fr; }
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+            .header h1 { font-size: 1.2rem; }
+            .content { padding: 12px; }
+            .tab-btn { padding: 10px 14px; font-size: 0.8rem; }
+            .chart-wrap { height: 260px; }
+            #map-container { height: 350px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Dashboard GD Brasil</h1>
+    <p>Micro e Minigeração Distribuída — Dados Abertos ANEEL</p>
+</div>
+
+<nav class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="visao-geral">Visão Geral</button>
+    <button class="tab-btn" data-tab="por-estado">Por Estado</button>
+    <button class="tab-btn" data-tab="por-municipio">Por Município</button>
+    <button class="tab-btn" data-tab="por-distribuidora">Por Distribuidora</button>
+    <button class="tab-btn" data-tab="empresas">Empresas MMGD</button>
+    <button class="tab-btn" data-tab="tecnologia">Tecnologia</button>
+</nav>
+
+<div class="content">
+    <!-- TAB: Visão Geral -->
+    <div class="tab-panel active" id="visao-geral">
+        <div class="kpi-grid" id="kpi-cards"></div>
+        <div class="chart-grid">
+            <div class="chart-box full">
+                <div class="chart-title">Evolução da Potência Acumulada e Novas Conexões</div>
+                <div class="chart-wrap tall"><canvas id="chart-evolucao"></canvas></div>
+            </div>
+            <div class="chart-box full">
+                <div class="chart-title">Evolução por Fonte de Energia (Potência Acumulada)</div>
+                <div class="chart-wrap tall"><canvas id="chart-fontes-evo"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Distribuição por Modalidade</div>
+                <div class="chart-wrap"><canvas id="chart-modalidade"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Micro vs Minigeração</div>
+                <div class="chart-wrap"><canvas id="chart-porte"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Distribuição por Fonte</div>
+                <div class="chart-wrap"><canvas id="chart-fonte"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Por Classe de Consumo</div>
+                <div class="chart-wrap"><canvas id="chart-classe"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB: Por Estado -->
+    <div class="tab-panel" id="por-estado">
+        <div class="chart-grid">
+            <div class="chart-box full">
+                <div class="chart-title">Potência Instalada por Estado (MW)</div>
+                <div id="map-container"></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Top 10 Estados por Potência</div>
+                <div class="chart-wrap tall"><canvas id="chart-ranking-uf"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Evolução Top 10 Estados</div>
+                <div class="chart-wrap tall"><canvas id="chart-uf-evo"></canvas></div>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table id="table-estados">
+                <thead>
+                    <tr>
+                        <th>UF</th>
+                        <th class="num">Potência (MW)</th>
+                        <th class="num">Conexões</th>
+                        <th class="num">UCs Crédito</th>
+                        <th class="num">% do Total</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB: Por Município -->
+    <div class="tab-panel" id="por-municipio">
+        <div class="search-box">
+            <input type="text" id="busca-municipio" placeholder="Buscar município...">
+        </div>
+        <div class="table-wrap" style="max-height:600px; overflow-y:auto;">
+            <table id="table-municipios">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Município</th>
+                        <th>UF</th>
+                        <th class="num">Potência (MW)</th>
+                        <th class="num">Conexões</th>
+                        <th class="num">UCs Crédito</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB: Por Distribuidora -->
+    <div class="tab-panel" id="por-distribuidora">
+        <div class="chart-grid">
+            <div class="chart-box">
+                <div class="chart-title">Top 20 Distribuidoras por Potência</div>
+                <div class="chart-wrap tall"><canvas id="chart-dist-ranking"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Evolução Top 10 Distribuidoras</div>
+                <div class="chart-wrap tall"><canvas id="chart-dist-evo"></canvas></div>
+            </div>
+        </div>
+        <div class="table-wrap" style="max-height:500px; overflow-y:auto;">
+            <table id="table-distribuidoras">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Distribuidora</th>
+                        <th class="num">Potência (MW)</th>
+                        <th class="num">Conexões</th>
+                        <th class="num">UCs Crédito</th>
+                        <th class="num">Municípios</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB: Empresas -->
+    <div class="tab-panel" id="empresas">
+        <div class="chart-grid">
+            <div class="chart-box full">
+                <div class="chart-title">Concentração de Mercado (Top 100 Empresas)</div>
+                <div class="chart-wrap"><canvas id="chart-pareto"></canvas></div>
+            </div>
+        </div>
+        <div class="search-box">
+            <input type="text" id="busca-empresa" placeholder="Buscar empresa...">
+        </div>
+        <div class="table-wrap" style="max-height:500px; overflow-y:auto;">
+            <table id="table-empresas">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Empresa</th>
+                        <th class="num">Potência (MW)</th>
+                        <th class="num">Empreendimentos</th>
+                        <th class="num">UFs</th>
+                        <th>Estados</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB: Tecnologia -->
+    <div class="tab-panel" id="tecnologia">
+        <div class="chart-grid">
+            <div class="chart-box">
+                <div class="chart-title">Top Fabricantes de Módulos (MW)</div>
+                <div class="chart-wrap tall"><canvas id="chart-fab-modulos"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Top Fabricantes de Inversores (MW)</div>
+                <div class="chart-wrap tall"><canvas id="chart-fab-inversores"></canvas></div>
+            </div>
+            <div class="chart-box full">
+                <div class="chart-title">Evolução da Potência Média por Sistema (kW)</div>
+                <div class="chart-wrap"><canvas id="chart-pot-media"></canvas></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="footer">
+    Dados: <a href="https://dadosabertos.aneel.gov.br/dataset/relacao-de-empreendimentos-de-geracao-distribuida" target="_blank">ANEEL Dados Abertos</a>
+    &bull; Atualizado periodicamente &bull;
+    <a href="https://github.com/Danielbluz/dashboard-gd-aneel" target="_blank">GitHub</a>
+</div>
+
+<script>
+// ===== GLOBALS =====
+const COLORS = ['#00d4aa','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#84cc16'];
+const charts = {};
+let DATA = {};
+
+// ===== UTILS =====
+function fmt(n) {
+    if (n >= 1e9) return (n/1e9).toFixed(1).replace('.',',') + ' bi';
+    if (n >= 1e6) return (n/1e6).toFixed(1).replace('.',',') + ' mi';
+    if (n >= 1e3) return (n/1e3).toFixed(1).replace('.',',') + ' mil';
+    return n.toLocaleString('pt-BR');
+}
+function fmtMW(n) {
+    if (n >= 1000) return (n/1000).toFixed(1).replace('.',',') + ' GW';
+    return n.toLocaleString('pt-BR', {maximumFractionDigits:1}) + ' MW';
+}
+function fmtNum(n) { return n.toLocaleString('pt-BR', {maximumFractionDigits:1}); }
+
+// Chart.js defaults
+Chart.defaults.color = '#8899aa';
+Chart.defaults.borderColor = '#2a3f55';
+Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+Chart.defaults.font.size = 11;
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
+
+// ===== DATA LOADING =====
+async function loadJSON(file) {
+    const resp = await fetch('data/' + file);
+    if (!resp.ok) throw new Error(`Erro ao carregar ${file}: ${resp.status}`);
+    return resp.json();
+}
+
+async function loadAllData() {
+    const [resumo, estados, municipios, distribuidoras, empresas, fabricantes] = await Promise.all([
+        loadJSON('resumo_geral.json'),
+        loadJSON('por_estado.json'),
+        loadJSON('por_municipio.json'),
+        loadJSON('por_distribuidora.json'),
+        loadJSON('empresas_top.json'),
+        loadJSON('fabricantes.json'),
+    ]);
+    DATA = { resumo, estados, municipios, distribuidoras, empresas, fabricantes };
+    return DATA;
+}
+
+// ===== TAB: VISÃO GERAL =====
+function renderVisaoGeral() {
+    const k = DATA.resumo.kpis;
+
+    // KPI Cards
+    document.getElementById('kpi-cards').innerHTML = `
+        <div class="kpi-card">
+            <div class="kpi-value">${fmtMW(k.total_mw)}</div>
+            <div class="kpi-label">Potência Instalada</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">${fmt(k.total_conexoes)}</div>
+            <div class="kpi-label">Conexões</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">${fmt(k.total_ucs_credito)}</div>
+            <div class="kpi-label">UCs com Crédito</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">+${k.crescimento_yoy_pct}%</div>
+            <div class="kpi-label">Crescimento ${k.ano_ref_yoy} vs ${k.ano_ref_yoy - 1}</div>
+        </div>
+    `;
+
+    // Evolução mensal
+    const evo = DATA.resumo.evolucao_mensal;
+    // Amostrar para não poluir (1 a cada 3 meses)
+    const evoSampled = evo.filter((_, i) => i % 3 === 0 || i === evo.length - 1);
+    charts.evolucao = new Chart(document.getElementById('chart-evolucao'), {
+        type: 'line',
+        data: {
+            labels: evoSampled.map(e => e.periodo),
+            datasets: [{
+                label: 'Potência Acumulada (MW)',
+                data: evoSampled.map(e => e.potencia_acumulada_mw),
+                borderColor: COLORS[0],
+                backgroundColor: COLORS[0] + '20',
+                fill: true,
+                tension: 0.3,
+                yAxisID: 'y',
+            }, {
+                label: 'Novas Conexões/mês',
+                data: evoSampled.map(e => e.novas_conexoes),
+                borderColor: COLORS[1],
+                backgroundColor: COLORS[1] + '40',
+                type: 'bar',
+                yAxisID: 'y1',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { ticks: { maxTicksLimit: 20, maxRotation: 45 } },
+                y: { position: 'left', title: { display: true, text: 'MW Acumulado' } },
+                y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Novas Conexões' } },
+            }
+        }
+    });
+
+    // Evolução por fonte (área empilhada)
+    const evoFonte = DATA.resumo.evolucao_fonte;
+    const fontesNames = Object.keys(evoFonte[0] || {}).filter(k => k !== 'periodo');
+    const evoFonteSampled = evoFonte.filter((_, i) => i % 3 === 0 || i === evoFonte.length - 1);
+    charts.fontesEvo = new Chart(document.getElementById('chart-fontes-evo'), {
+        type: 'line',
+        data: {
+            labels: evoFonteSampled.map(e => e.periodo),
+            datasets: fontesNames.map((f, i) => ({
+                label: f,
+                data: evoFonteSampled.map(e => e[f] || 0),
+                borderColor: COLORS[i % COLORS.length],
+                backgroundColor: COLORS[i % COLORS.length] + '30',
+                fill: true,
+                tension: 0.3,
+            }))
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { ticks: { maxTicksLimit: 20, maxRotation: 45 } },
+                y: { stacked: true, title: { display: true, text: 'MW Acumulado' } },
+            },
+            plugins: { legend: { position: 'top' } }
+        }
+    });
+
+    // Donut: Modalidade
+    const mods = DATA.resumo.modalidades;
+    charts.modalidade = new Chart(document.getElementById('chart-modalidade'), {
+        type: 'doughnut',
+        data: {
+            labels: mods.map(m => m.modalidade),
+            datasets: [{
+                data: mods.map(m => m.potencia_mw),
+                backgroundColor: COLORS.slice(0, mods.length),
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 12 } },
+                tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtMW(ctx.raw)}` } }
+            }
+        }
+    });
+
+    // Donut: Porte
+    const portes = DATA.resumo.portes;
+    charts.porte = new Chart(document.getElementById('chart-porte'), {
+        type: 'doughnut',
+        data: {
+            labels: portes.map(p => p.porte),
+            datasets: [{
+                data: portes.map(p => p.potencia_mw),
+                backgroundColor: [COLORS[0], COLORS[1], COLORS[2]],
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtMW(ctx.raw)}` } }
+            }
+        }
+    });
+
+    // Donut: Fonte
+    const fontes = DATA.resumo.fontes;
+    charts.fonte = new Chart(document.getElementById('chart-fonte'), {
+        type: 'doughnut',
+        data: {
+            labels: fontes.map(f => f.fonte),
+            datasets: [{
+                data: fontes.map(f => f.potencia_mw),
+                backgroundColor: COLORS.slice(0, fontes.length),
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtMW(ctx.raw)}` } }
+            }
+        }
+    });
+
+    // Bar: Classe de consumo
+    const classes = DATA.resumo.classes.slice(0, 8);
+    charts.classe = new Chart(document.getElementById('chart-classe'), {
+        type: 'bar',
+        data: {
+            labels: classes.map(c => c.classe),
+            datasets: [{
+                label: 'Potência (MW)',
+                data: classes.map(c => c.potencia_mw),
+                backgroundColor: COLORS[0] + '80',
+                borderColor: COLORS[0],
+                borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { title: { display: true, text: 'MW' } } }
+        }
+    });
+}
+
+// ===== TAB: POR ESTADO =====
+function renderEstados() {
+    const est = DATA.estados.estados;
+    const maxMW = est[0]?.potencia_mw || 1;
+
+    // Ranking horizontal bars
+    const top10 = est.slice(0, 10);
+    charts.rankingUF = new Chart(document.getElementById('chart-ranking-uf'), {
+        type: 'bar',
+        data: {
+            labels: top10.map(e => e.uf),
+            datasets: [{
+                label: 'Potência (MW)',
+                data: top10.map(e => e.potencia_mw),
+                backgroundColor: COLORS.slice(0, 10).map(c => c + '80'),
+                borderColor: COLORS.slice(0, 10),
+                borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { title: { display: true, text: 'MW' } } }
+        }
+    });
+
+    // Evolução top 10
+    const evo = DATA.estados.evolucao_top10;
+    const ufs = DATA.estados.top10_ufs;
+    const evoSampled = evo.filter((_, i) => i % 3 === 0 || i === evo.length - 1);
+    charts.ufEvo = new Chart(document.getElementById('chart-uf-evo'), {
+        type: 'line',
+        data: {
+            labels: evoSampled.map(e => e.periodo),
+            datasets: ufs.map((uf, i) => ({
+                label: uf,
+                data: evoSampled.map(e => e[uf] || 0),
+                borderColor: COLORS[i],
+                tension: 0.3,
+                pointRadius: 0,
+            }))
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { ticks: { maxTicksLimit: 15, maxRotation: 45 } },
+                y: { title: { display: true, text: 'MW Acumulado' } }
+            }
+        }
+    });
+
+    // Tabela
+    const tbody = document.querySelector('#table-estados tbody');
+    tbody.innerHTML = est.map(e => `
+        <tr>
+            <td><strong>${e.uf}</strong></td>
+            <td class="num bar-cell">
+                <div class="bar-fill" style="width:${(e.potencia_mw/maxMW*100).toFixed(1)}%"></div>
+                <span>${fmtNum(e.potencia_mw)}</span>
+            </td>
+            <td class="num">${fmt(e.conexoes)}</td>
+            <td class="num">${fmt(e.ucs_credito)}</td>
+            <td class="num">${e.pct_total}%</td>
+        </tr>
+    `).join('');
+
+    // Mapa ECharts
+    renderMapa(est);
+}
+
+async function renderMapa(estados) {
+    try {
+        const resp = await fetch('assets/brazil-states.geojson');
+        if (!resp.ok) {
+            document.getElementById('map-container').innerHTML =
+                '<p style="padding:40px;text-align:center;color:var(--text-muted)">GeoJSON não encontrado. Execute o ETL para gerar o mapa.</p>';
+            return;
+        }
+        const geoJson = await resp.json();
+
+        // Mapear UF → nome completo do estado no GeoJSON
+        const ufToName = {};
+        geoJson.features.forEach(f => {
+            const sigla = f.properties.sigla || f.properties.UF || f.properties.SIGLA;
+            const nome = f.properties.name || f.properties.NAME || f.properties.nome || f.properties.NOME;
+            if (sigla) ufToName[sigla] = nome;
+        });
+
+        echarts.registerMap('brazil', geoJson);
+
+        const mapData = estados.map(e => ({
+            name: ufToName[e.uf] || e.uf,
+            value: e.potencia_mw,
+            uf: e.uf,
+        }));
+
+        const mapChart = echarts.init(document.getElementById('map-container'));
+        mapChart.setOption({
+            tooltip: {
+                trigger: 'item',
+                formatter: p => `<strong>${p.data?.uf || p.name}</strong><br/>Potência: ${fmtMW(p.value || 0)}`
+            },
+            visualMap: {
+                min: 0,
+                max: Math.max(...estados.map(e => e.potencia_mw)),
+                text: ['MW', ''],
+                inRange: { color: ['#1a2736', '#0d4a3a', '#00d4aa'] },
+                textStyle: { color: '#8899aa' },
+                left: 'left',
+                bottom: 20,
+            },
+            series: [{
+                type: 'map',
+                map: 'brazil',
+                roam: true,
+                data: mapData,
+                emphasis: {
+                    label: { show: true, color: '#fff' },
+                    itemStyle: { areaColor: '#3b82f6' }
+                },
+                itemStyle: { borderColor: '#2a3f55', borderWidth: 0.5 },
+                label: { show: false },
+            }]
+        });
+
+        window.addEventListener('resize', () => mapChart.resize());
+    } catch (err) {
+        console.warn('Erro ao renderizar mapa:', err);
+        document.getElementById('map-container').innerHTML =
+            '<p style="padding:40px;text-align:center;color:var(--text-muted)">Mapa indisponível</p>';
+    }
+}
+
+// ===== TAB: POR MUNICÍPIO =====
+function renderMunicipios() {
+    const muns = DATA.municipios.municipios;
+    const maxMW = muns[0]?.potencia_mw || 1;
+
+    function renderTable(data) {
+        const tbody = document.querySelector('#table-municipios tbody');
+        tbody.innerHTML = data.map((m, i) => `
+            <tr>
+                <td class="num">${i + 1}</td>
+                <td><strong>${m.municipio}</strong></td>
+                <td>${m.uf}</td>
+                <td class="num bar-cell">
+                    <div class="bar-fill" style="width:${(m.potencia_mw/maxMW*100).toFixed(1)}%"></div>
+                    <span>${fmtNum(m.potencia_mw)}</span>
+                </td>
+                <td class="num">${fmt(m.conexoes)}</td>
+                <td class="num">${fmt(m.ucs_credito)}</td>
+            </tr>
+        `).join('');
+    }
+
+    renderTable(muns);
+
+    document.getElementById('busca-municipio').addEventListener('input', function() {
+        const q = this.value.toLowerCase();
+        const filtered = q ? muns.filter(m =>
+            m.municipio.toLowerCase().includes(q) || m.uf.toLowerCase().includes(q)
+        ) : muns;
+        renderTable(filtered);
+    });
+}
+
+// ===== TAB: POR DISTRIBUIDORA =====
+function renderDistribuidoras() {
+    const dists = DATA.distribuidoras.distribuidoras;
+    const maxMW = dists[0]?.potencia_mw || 1;
+
+    // Top 20 ranking
+    const top20 = dists.slice(0, 20);
+    charts.distRanking = new Chart(document.getElementById('chart-dist-ranking'), {
+        type: 'bar',
+        data: {
+            labels: top20.map(d => d.distribuidora.length > 25 ? d.distribuidora.slice(0,25) + '...' : d.distribuidora),
+            datasets: [{
+                label: 'Potência (MW)',
+                data: top20.map(d => d.potencia_mw),
+                backgroundColor: COLORS[0] + '80',
+                borderColor: COLORS[0],
+                borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { title: { display: true, text: 'MW' } } }
+        }
+    });
+
+    // Evolução top 10
+    const evo = DATA.distribuidoras.evolucao_top10;
+    const top10names = DATA.distribuidoras.top10;
+    const evoSampled = evo.filter((_, i) => i % 6 === 0 || i === evo.length - 1);
+    charts.distEvo = new Chart(document.getElementById('chart-dist-evo'), {
+        type: 'line',
+        data: {
+            labels: evoSampled.map(e => e.periodo),
+            datasets: top10names.map((name, i) => ({
+                label: name.length > 20 ? name.slice(0,20) + '...' : name,
+                data: evoSampled.map(e => e[name] || 0),
+                borderColor: COLORS[i],
+                tension: 0.3,
+                pointRadius: 0,
+            }))
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { ticks: { maxTicksLimit: 15, maxRotation: 45 } },
+                y: { title: { display: true, text: 'MW Acumulado' } }
+            },
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } }
+        }
+    });
+
+    // Tabela
+    const tbody = document.querySelector('#table-distribuidoras tbody');
+    tbody.innerHTML = dists.map((d, i) => `
+        <tr>
+            <td class="num">${i + 1}</td>
+            <td><strong>${d.distribuidora}</strong></td>
+            <td class="num bar-cell">
+                <div class="bar-fill" style="width:${(d.potencia_mw/maxMW*100).toFixed(1)}%"></div>
+                <span>${fmtNum(d.potencia_mw)}</span>
+            </td>
+            <td class="num">${fmt(d.conexoes)}</td>
+            <td class="num">${fmt(d.ucs_credito)}</td>
+            <td class="num">${d.municipios}</td>
+        </tr>
+    `).join('');
+}
+
+// ===== TAB: EMPRESAS =====
+function renderEmpresas() {
+    const emps = DATA.empresas.empresas;
+    const pareto = DATA.empresas.pareto;
+
+    // Pareto
+    charts.pareto = new Chart(document.getElementById('chart-pareto'), {
+        type: 'line',
+        data: {
+            labels: pareto.map(p => `Top ${p.rank}`),
+            datasets: [{
+                label: '% Acumulado da Potência Total',
+                data: pareto.map(p => p.pct_acumulado),
+                borderColor: COLORS[0],
+                backgroundColor: COLORS[0] + '20',
+                fill: true,
+                tension: 0.3,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { title: { display: true, text: '% do Total' }, max: 100 }
+            }
+        }
+    });
+
+    function renderTable(data) {
+        const tbody = document.querySelector('#table-empresas tbody');
+        tbody.innerHTML = data.map((e, i) => `
+            <tr>
+                <td class="num">${i + 1}</td>
+                <td><strong>${e.nome}</strong></td>
+                <td class="num">${fmtNum(e.potencia_mw)}</td>
+                <td class="num">${fmt(e.empreendimentos)}</td>
+                <td class="num">${e.qtd_ufs}</td>
+                <td>${e.ufs}</td>
+            </tr>
+        `).join('');
+    }
+
+    renderTable(emps);
+
+    document.getElementById('busca-empresa').addEventListener('input', function() {
+        const q = this.value.toLowerCase();
+        const filtered = q ? emps.filter(e => e.nome.toLowerCase().includes(q)) : emps;
+        renderTable(filtered);
+    });
+}
+
+// ===== TAB: TECNOLOGIA =====
+function renderTecnologia() {
+    const fab = DATA.fabricantes;
+
+    // Módulos
+    if (fab.modulos?.length) {
+        const top15 = fab.modulos.slice(0, 15);
+        charts.fabModulos = new Chart(document.getElementById('chart-fab-modulos'), {
+            type: 'bar',
+            data: {
+                labels: top15.map(f => f.fabricante.length > 20 ? f.fabricante.slice(0,20)+'...' : f.fabricante),
+                datasets: [{
+                    label: 'Potência (MW)',
+                    data: top15.map(f => f.potencia_mw),
+                    backgroundColor: COLORS[0] + '80',
+                    borderColor: COLORS[0],
+                    borderWidth: 1,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+            }
+        });
+    }
+
+    // Inversores
+    if (fab.inversores?.length) {
+        const top15 = fab.inversores.slice(0, 15);
+        charts.fabInversores = new Chart(document.getElementById('chart-fab-inversores'), {
+            type: 'bar',
+            data: {
+                labels: top15.map(f => f.fabricante.length > 20 ? f.fabricante.slice(0,20)+'...' : f.fabricante),
+                datasets: [{
+                    label: 'Potência (MW)',
+                    data: top15.map(f => f.potencia_mw),
+                    backgroundColor: COLORS[1] + '80',
+                    borderColor: COLORS[1],
+                    borderWidth: 1,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+            }
+        });
+    }
+
+    // Potência média
+    if (fab.potencia_media?.length) {
+        const pm = fab.potencia_media;
+        const sampled = pm.filter((_, i) => i % 3 === 0 || i === pm.length - 1);
+        charts.potMedia = new Chart(document.getElementById('chart-pot-media'), {
+            type: 'line',
+            data: {
+                labels: sampled.map(p => p.periodo),
+                datasets: [{
+                    label: 'Potência Média (kW)',
+                    data: sampled.map(p => p.kw_medio),
+                    borderColor: COLORS[2],
+                    backgroundColor: COLORS[2] + '20',
+                    fill: true,
+                    tension: 0.3,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { maxTicksLimit: 15, maxRotation: 45 } },
+                    y: { title: { display: true, text: 'kW' } }
+                }
+            }
+        });
+    }
+}
+
+// ===== TABS =====
+const tabsRendered = new Set();
+
+document.getElementById('tabs').addEventListener('click', function(e) {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const tabId = btn.dataset.tab;
+    document.getElementById(tabId).classList.add('active');
+
+    // Lazy render
+    if (!tabsRendered.has(tabId)) {
+        tabsRendered.add(tabId);
+        switch(tabId) {
+            case 'por-estado': renderEstados(); break;
+            case 'por-municipio': renderMunicipios(); break;
+            case 'por-distribuidora': renderDistribuidoras(); break;
+            case 'empresas': renderEmpresas(); break;
+            case 'tecnologia': renderTecnologia(); break;
+        }
+    }
+});
+
+// ===== TABLE SORTING =====
+document.querySelectorAll('table').forEach(table => {
+    table.querySelectorAll('th').forEach((th, colIdx) => {
+        th.addEventListener('click', () => {
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const isNum = th.classList.contains('num');
+            const asc = th.dataset.sort !== 'asc';
+            th.dataset.sort = asc ? 'asc' : 'desc';
+
+            rows.sort((a, b) => {
+                let va = a.children[colIdx]?.textContent.trim() || '';
+                let vb = b.children[colIdx]?.textContent.trim() || '';
+                if (isNum) {
+                    va = parseFloat(va.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+                    vb = parseFloat(vb.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+                    return asc ? va - vb : vb - va;
+                }
+                return asc ? va.localeCompare(vb) : vb.localeCompare(va);
+            });
+            rows.forEach(r => tbody.appendChild(r));
+        });
+    });
+});
+
+// ===== INIT =====
+(async function() {
+    try {
+        await loadAllData();
+        tabsRendered.add('visao-geral');
+        renderVisaoGeral();
+    } catch(err) {
+        document.querySelector('.content').innerHTML = `
+            <div class="loading" style="animation:none">
+                <p>Erro ao carregar dados: ${err.message}</p>
+                <p style="margin-top:8px;font-size:0.8rem">Execute o ETL primeiro: <code>python etl/processar_dados.py</code></p>
+            </div>
+        `;
+    }
+})();
+</script>
+
+</body>
+</html>

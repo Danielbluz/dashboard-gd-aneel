@@ -1,0 +1,5 @@
+etl/raw/
+*.csv
+__pycache__/
+*.pyc
+.env
