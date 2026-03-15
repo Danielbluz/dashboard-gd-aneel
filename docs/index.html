@@ -351,6 +351,25 @@
 
     <!-- TAB: Por Município -->
     <div class="tab-panel" id="por-municipio">
+        <div class="kpi-grid" id="kpi-municipio"></div>
+        <div class="chart-grid">
+            <div class="chart-box">
+                <div class="chart-title">Top 20 Municípios por UCs Recebendo Crédito</div>
+                <div class="chart-wrap tall"><canvas id="chart-mun-ucs"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Top 20 Municípios por Potência Instalada (MW)</div>
+                <div class="chart-wrap tall"><canvas id="chart-mun-potencia"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Tamanho Médio dos Sistemas (kW/conexão)</div>
+                <div class="chart-wrap tall"><canvas id="chart-mun-tamanho"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">UCs por Conexão (fator de compartilhamento)</div>
+                <div class="chart-wrap tall"><canvas id="chart-mun-fator"></canvas></div>
+            </div>
+        </div>
         <div class="search-box">
             <input type="text" id="busca-municipio" placeholder="Buscar município...">
         </div>
@@ -364,6 +383,8 @@
                         <th class="num">Potência (MW)</th>
                         <th class="num">Conexões</th>
                         <th class="num">UCs Crédito</th>
+                        <th class="num">kW/conexão</th>
+                        <th class="num">UCs/conexão</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -877,8 +898,128 @@ async function renderMapa(estados) {
 // ===== TAB: POR MUNICÍPIO =====
 function renderMunicipios() {
     const muns = DATA.municipios.municipios;
-    const maxMW = muns[0]?.potencia_mw || 1;
+    const maxUCs = Math.max(...muns.map(m => m.ucs_credito));
 
+    // Enriquecer dados com métricas calculadas
+    muns.forEach(m => {
+        m.kw_por_conexao = m.conexoes > 0 ? Math.round(m.potencia_mw * 1000 / m.conexoes * 10) / 10 : 0;
+        m.ucs_por_conexao = m.conexoes > 0 ? Math.round(m.ucs_credito / m.conexoes * 10) / 10 : 0;
+    });
+
+    // KPIs
+    const totalUCs = muns.reduce((s, m) => s + m.ucs_credito, 0);
+    const totalMW = muns.reduce((s, m) => s + m.potencia_mw, 0);
+    const totalConexoes = muns.reduce((s, m) => s + m.conexoes, 0);
+    const kwMedio = totalMW * 1000 / totalConexoes;
+    document.getElementById('kpi-municipio').innerHTML = `
+        <div class="kpi-card">
+            <div class="kpi-value">${fmt(totalUCs)}</div>
+            <div class="kpi-label">UCs Recebendo Crédito (Top 500)</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">${fmtMW(totalMW)}</div>
+            <div class="kpi-label">Potência Instalada</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">${kwMedio.toFixed(1)} kW</div>
+            <div class="kpi-label">Tamanho Médio / Conexão</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">${(totalUCs / totalConexoes).toFixed(1)}</div>
+            <div class="kpi-label">UCs / Conexão (média)</div>
+        </div>
+    `;
+
+    // Top 20 por UCs
+    const topUCs = [...muns].sort((a, b) => b.ucs_credito - a.ucs_credito).slice(0, 20);
+    charts.munUcs = new Chart(document.getElementById('chart-mun-ucs'), {
+        type: 'bar',
+        data: {
+            labels: topUCs.map(m => `${m.municipio} (${m.uf})`),
+            datasets: [{
+                label: 'UCs com Crédito',
+                data: topUCs.map(m => m.ucs_credito),
+                backgroundColor: COLORS[0] + '80',
+                borderColor: COLORS[0],
+                borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { title: { display: true, text: 'UCs' } } }
+        }
+    });
+
+    // Top 20 por Potência
+    const topMW = muns.slice(0, 20);
+    charts.munPotencia = new Chart(document.getElementById('chart-mun-potencia'), {
+        type: 'bar',
+        data: {
+            labels: topMW.map(m => `${m.municipio} (${m.uf})`),
+            datasets: [{
+                label: 'Potência (MW)',
+                data: topMW.map(m => m.potencia_mw),
+                backgroundColor: COLORS[1] + '80',
+                borderColor: COLORS[1],
+                borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { title: { display: true, text: 'MW' } } }
+        }
+    });
+
+    // Top 20 tamanho médio (kW/conexão) — filtrar municípios com >100 conexões
+    const munsFiltrados = muns.filter(m => m.conexoes >= 100);
+    const topTamanho = [...munsFiltrados].sort((a, b) => b.kw_por_conexao - a.kw_por_conexao).slice(0, 20);
+    charts.munTamanho = new Chart(document.getElementById('chart-mun-tamanho'), {
+        type: 'bar',
+        data: {
+            labels: topTamanho.map(m => `${m.municipio} (${m.uf})`),
+            datasets: [{
+                label: 'kW/conexão',
+                data: topTamanho.map(m => m.kw_por_conexao),
+                backgroundColor: COLORS[2] + '80',
+                borderColor: COLORS[2],
+                borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { title: { display: true, text: 'kW por conexão' } } }
+        }
+    });
+
+    // Top 20 fator de compartilhamento (UCs/conexão) — indica GD remota/compartilhada
+    const topFator = [...munsFiltrados].sort((a, b) => b.ucs_por_conexao - a.ucs_por_conexao).slice(0, 20);
+    charts.munFator = new Chart(document.getElementById('chart-mun-fator'), {
+        type: 'bar',
+        data: {
+            labels: topFator.map(m => `${m.municipio} (${m.uf})`),
+            datasets: [{
+                label: 'UCs/conexão',
+                data: topFator.map(m => m.ucs_por_conexao),
+                backgroundColor: COLORS[3] + '80',
+                borderColor: COLORS[3],
+                borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { title: { display: true, text: 'UCs por conexão' } } }
+        }
+    });
+
+    // Tabela
     function renderTable(data) {
         const tbody = document.querySelector('#table-municipios tbody');
         tbody.innerHTML = data.map((m, i) => `
@@ -886,12 +1027,14 @@ function renderMunicipios() {
                 <td class="num">${i + 1}</td>
                 <td><strong>${m.municipio}</strong></td>
                 <td>${m.uf}</td>
-                <td class="num bar-cell">
-                    <div class="bar-fill" style="width:${(m.potencia_mw/maxMW*100).toFixed(1)}%"></div>
-                    <span>${fmtNum(m.potencia_mw)}</span>
-                </td>
+                <td class="num">${fmtNum(m.potencia_mw)}</td>
                 <td class="num">${fmt(m.conexoes)}</td>
-                <td class="num">${fmt(m.ucs_credito)}</td>
+                <td class="num bar-cell">
+                    <div class="bar-fill" style="width:${(m.ucs_credito/maxUCs*100).toFixed(1)}%"></div>
+                    <span>${fmt(m.ucs_credito)}</span>
+                </td>
+                <td class="num">${m.kw_por_conexao}</td>
+                <td class="num" style="color:${m.ucs_por_conexao > 3 ? 'var(--accent)' : 'var(--text)'}">${m.ucs_por_conexao}</td>
             </tr>
         `).join('');
     }
