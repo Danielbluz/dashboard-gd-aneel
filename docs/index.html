@@ -280,6 +280,7 @@
     <button class="tab-btn" data-tab="por-estado">Por Estado</button>
     <button class="tab-btn" data-tab="por-municipio">Por Município</button>
     <button class="tab-btn" data-tab="por-distribuidora">Por Distribuidora</button>
+    <button class="tab-btn" data-tab="mercado">Mercado</button>
     <button class="tab-btn" data-tab="empresas">Empresas MMGD</button>
     <button class="tab-btn" data-tab="tecnologia">Tecnologia</button>
 </nav>
@@ -399,6 +400,56 @@
         </div>
     </div>
 
+    <!-- TAB: Mercado -->
+    <div class="tab-panel" id="mercado">
+        <div class="kpi-grid" id="kpi-mercado"></div>
+        <div class="chart-grid">
+            <div class="chart-box full">
+                <div class="chart-title">Composição do Mercado de Energia (%)</div>
+                <div class="chart-wrap tall"><canvas id="chart-mercado-proporcao"></canvas></div>
+            </div>
+            <div class="chart-box full">
+                <div class="chart-title">Evolução Anual por Segmento (GWh)</div>
+                <div class="chart-wrap tall"><canvas id="chart-mercado-anual"></canvas></div>
+            </div>
+            <div class="chart-box full">
+                <div class="chart-title">Evolução Mensal — GD Compensada vs Injetada (GWh)</div>
+                <div class="chart-wrap tall"><canvas id="chart-mercado-gd-mensal"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">GD Compensada por Classe de Consumo</div>
+                <div class="chart-wrap"><canvas id="chart-mercado-classe"></canvas></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Evolução GD Compensada — Top Distribuidoras (GWh)</div>
+                <div class="chart-wrap tall"><canvas id="chart-mercado-dist-evo"></canvas></div>
+            </div>
+        </div>
+        <div class="chart-box" style="margin-bottom:16px">
+            <div class="chart-title">Participação da GD por Distribuidora (%) — <span id="mercado-ano-ref"></span></div>
+        </div>
+        <div class="search-box">
+            <input type="text" id="busca-mercado" placeholder="Buscar distribuidora...">
+        </div>
+        <div class="table-wrap" style="max-height:500px; overflow-y:auto;">
+            <table id="table-mercado">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Distribuidora</th>
+                        <th class="num">Total (GWh)</th>
+                        <th class="num">Cativo (GWh)</th>
+                        <th class="num">Livre (GWh)</th>
+                        <th class="num">GD Comp. (GWh)</th>
+                        <th class="num">GD Inj. (GWh)</th>
+                        <th class="num">% GD</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- TAB: Empresas -->
     <div class="tab-panel" id="empresas">
         <div class="chart-grid">
@@ -487,15 +538,16 @@ async function loadJSON(file) {
 }
 
 async function loadAllData() {
-    const [resumo, estados, municipios, distribuidoras, empresas, fabricantes] = await Promise.all([
+    const [resumo, estados, municipios, distribuidoras, empresas, fabricantes, mercado] = await Promise.all([
         loadJSON('resumo_geral.json'),
         loadJSON('por_estado.json'),
         loadJSON('por_municipio.json'),
         loadJSON('por_distribuidora.json'),
         loadJSON('empresas_top.json'),
         loadJSON('fabricantes.json'),
+        loadJSON('mercado_distribuidora.json'),
     ]);
-    DATA = { resumo, estados, municipios, distribuidoras, empresas, fabricantes };
+    DATA = { resumo, estados, municipios, distribuidoras, empresas, fabricantes, mercado };
     return DATA;
 }
 
@@ -1053,6 +1105,211 @@ function renderTecnologia() {
     }
 }
 
+// ===== TAB: MERCADO =====
+function renderMercado() {
+    const m = DATA.mercado;
+    const MCOLORS = {
+        'Mercado Cativo': '#3b82f6',
+        'Mercado Livre': '#8b5cf6',
+        'GD Compensada': '#00d4aa',
+        'GD Injetada': '#f59e0b',
+        'GD Consumo Próprio': '#14b8a6',
+        'Outros': '#64748b',
+    };
+
+    // KPIs do último ano com dados completos
+    const lastFull = m.proporcao_anual.filter(p => p.ano <= m.ano_referencia).pop();
+    const prevYear = m.proporcao_anual.filter(p => p.ano === lastFull.ano - 1).pop();
+    const gdGrowth = lastFull && prevYear ? (lastFull.pct_gd - prevYear.pct_gd).toFixed(1) : '?';
+
+    document.getElementById('kpi-mercado').innerHTML = `
+        <div class="kpi-card">
+            <div class="kpi-value">${lastFull.pct_gd}%</div>
+            <div class="kpi-label">GD no Mercado (${lastFull.ano})</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">${lastFull.pct_cativo}%</div>
+            <div class="kpi-label">Mercado Cativo</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">${lastFull.pct_livre}%</div>
+            <div class="kpi-label">Mercado Livre</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">+${gdGrowth}pp</div>
+            <div class="kpi-label">Avanço GD ${lastFull.ano - 1}-${lastFull.ano}</div>
+        </div>
+    `;
+
+    // Proporção anual (stacked bar 100%)
+    const propAnual = m.proporcao_anual.filter(p => p.ano <= m.ano_referencia);
+    charts.mercadoProporcao = new Chart(document.getElementById('chart-mercado-proporcao'), {
+        type: 'bar',
+        data: {
+            labels: propAnual.map(p => p.ano),
+            datasets: [
+                { label: 'GD (%)', data: propAnual.map(p => p.pct_gd), backgroundColor: MCOLORS['GD Compensada'] },
+                { label: 'Mercado Livre (%)', data: propAnual.map(p => p.pct_livre), backgroundColor: MCOLORS['Mercado Livre'] },
+                { label: 'Mercado Cativo (%)', data: propAnual.map(p => 100 - p.pct_gd - p.pct_livre), backgroundColor: MCOLORS['Mercado Cativo'] },
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { stacked: true },
+                y: { stacked: true, max: 100, title: { display: true, text: '%' } }
+            },
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%` } }
+            }
+        }
+    });
+
+    // Evolução anual por segmento (barras agrupadas)
+    const evoAnual = m.evolucao_anual.filter(r => r.ano <= m.ano_referencia);
+    const segmentos = ['Mercado Cativo', 'Mercado Livre', 'GD Compensada', 'GD Injetada'];
+    charts.mercadoAnual = new Chart(document.getElementById('chart-mercado-anual'), {
+        type: 'bar',
+        data: {
+            labels: evoAnual.map(r => r.ano),
+            datasets: segmentos.map(seg => ({
+                label: seg,
+                data: evoAnual.map(r => r[seg] || 0),
+                backgroundColor: (MCOLORS[seg] || '#888') + 'cc',
+                borderColor: MCOLORS[seg] || '#888',
+                borderWidth: 1,
+            }))
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { title: { display: true, text: 'GWh' } }
+            },
+            plugins: { legend: { position: 'top' } }
+        }
+    });
+
+    // GD Compensada vs Injetada mensal
+    const evoMensal = m.evolucao_mensal;
+    const evoSampled = evoMensal.filter((_, i) => i % 2 === 0 || i === evoMensal.length - 1);
+    charts.mercadoGdMensal = new Chart(document.getElementById('chart-mercado-gd-mensal'), {
+        type: 'line',
+        data: {
+            labels: evoSampled.map(e => e.periodo),
+            datasets: [
+                {
+                    label: 'GD Compensada',
+                    data: evoSampled.map(e => e['GD Compensada'] || 0),
+                    borderColor: MCOLORS['GD Compensada'],
+                    backgroundColor: MCOLORS['GD Compensada'] + '20',
+                    fill: true, tension: 0.3,
+                },
+                {
+                    label: 'GD Injetada',
+                    data: evoSampled.map(e => e['GD Injetada'] || 0),
+                    borderColor: MCOLORS['GD Injetada'],
+                    backgroundColor: MCOLORS['GD Injetada'] + '20',
+                    fill: true, tension: 0.3,
+                },
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { ticks: { maxTicksLimit: 20, maxRotation: 45 } },
+                y: { title: { display: true, text: 'GWh' } }
+            }
+        }
+    });
+
+    // GD por classe de consumo
+    const classesGD = m.classes_gd.slice(0, 8);
+    charts.mercadoClasse = new Chart(document.getElementById('chart-mercado-classe'), {
+        type: 'doughnut',
+        data: {
+            labels: classesGD.map(c => c.classe),
+            datasets: [{
+                data: classesGD.map(c => c.gwh),
+                backgroundColor: COLORS.slice(0, classesGD.length),
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 10 } },
+                tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtNum(ctx.raw)} GWh` } }
+            }
+        }
+    });
+
+    // Evolução GD Compensada por distribuidora
+    const evoDist = m.evolucao_dist_gd;
+    const topSiglas = m.top15_siglas.slice(0, 10);
+    charts.mercadoDistEvo = new Chart(document.getElementById('chart-mercado-dist-evo'), {
+        type: 'line',
+        data: {
+            labels: evoDist.map(e => e.periodo),
+            datasets: topSiglas.map((sigla, i) => ({
+                label: sigla,
+                data: evoDist.map(e => e[sigla] || 0),
+                borderColor: COLORS[i],
+                tension: 0.3,
+                pointRadius: 0,
+            }))
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { ticks: { maxTicksLimit: 15, maxRotation: 45 } },
+                y: { title: { display: true, text: 'GWh' } }
+            },
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } }
+        }
+    });
+
+    // Ano referência label
+    document.getElementById('mercado-ano-ref').textContent = m.ano_referencia;
+
+    // Tabela distribuidoras
+    const dists = m.distribuidoras;
+    function renderTableMercado(data) {
+        const tbody = document.querySelector('#table-mercado tbody');
+        const maxGWh = data[0]?.total_gwh || 1;
+        tbody.innerHTML = data.map((d, i) => `
+            <tr>
+                <td class="num">${i + 1}</td>
+                <td><strong>${d.sigla}</strong></td>
+                <td class="num bar-cell">
+                    <div class="bar-fill" style="width:${(d.total_gwh/maxGWh*100).toFixed(1)}%"></div>
+                    <span>${fmtNum(d.total_gwh)}</span>
+                </td>
+                <td class="num">${fmtNum(d['Mercado Cativo'] || 0)}</td>
+                <td class="num">${fmtNum(d['Mercado Livre'] || 0)}</td>
+                <td class="num">${fmtNum(d['GD Compensada'] || 0)}</td>
+                <td class="num">${fmtNum(d['GD Injetada'] || 0)}</td>
+                <td class="num" style="color:${d.pct_gd > 15 ? 'var(--accent)' : d.pct_gd > 8 ? 'var(--accent3)' : 'var(--text)'}">${d.pct_gd}%</td>
+            </tr>
+        `).join('');
+    }
+    renderTableMercado(dists);
+
+    document.getElementById('busca-mercado').addEventListener('input', function() {
+        const q = this.value.toLowerCase();
+        const filtered = q ? dists.filter(d =>
+            d.sigla.toLowerCase().includes(q) || d.nome.toLowerCase().includes(q)
+        ) : dists;
+        renderTableMercado(filtered);
+    });
+}
+
 // ===== TABS =====
 const tabsRendered = new Set();
 
@@ -1073,6 +1330,7 @@ document.getElementById('tabs').addEventListener('click', function(e) {
             case 'por-estado': renderEstados(); break;
             case 'por-municipio': renderMunicipios(); break;
             case 'por-distribuidora': renderDistribuidoras(); break;
+            case 'mercado': renderMercado(); break;
             case 'empresas': renderEmpresas(); break;
             case 'tecnologia': renderTecnologia(); break;
         }
