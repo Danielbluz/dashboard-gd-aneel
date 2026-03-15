@@ -172,6 +172,10 @@ def gerar_mercado_distribuidora(df: pd.DataFrame) -> dict:
         gd_total = d.get("GD Compensada", 0) + d.get("GD Injetada", 0)
         d["total_gwh"] = round(total, 1)
         d["pct_gd"] = round(gd_total / total * 100, 1) if total > 0 else 0
+        # Penetração: consumo_GD / (consumo_GD + consumo_regulado)
+        consumo_gd = d.get("GD Consumo Próprio", 0)
+        consumo_reg = d.get("Mercado Cativo", 0)
+        d["penetracao"] = round(consumo_gd / (consumo_gd + consumo_reg) * 100, 1) if (consumo_gd + consumo_reg) > 0 else 0
         distribuidoras.append(d)
 
     # Ordenar por total
@@ -230,6 +234,66 @@ def gerar_mercado_distribuidora(df: pd.DataFrame) -> dict:
             "pct_livre": round(livre / total * 100, 1) if total > 0 else 0,
         })
 
+    # === 7. Penetração da GD ===
+    # consumo_GD / (consumo_GD + consumo_regulado) por ano
+    penetracao_anual = []
+    for row in evolucao_anual:
+        ano = row["ano"]
+        consumo_gd = row.get("GD Consumo Próprio", 0)
+        consumo_reg = row.get("Mercado Cativo", 0)
+        denom = consumo_gd + consumo_reg
+        penetracao_anual.append({
+            "ano": ano,
+            "penetracao": round(consumo_gd / denom * 100, 1) if denom > 0 else 0,
+            "consumo_gd_gwh": round(consumo_gd, 1),
+            "consumo_reg_gwh": round(consumo_reg, 1),
+        })
+
+    # Penetração mensal nacional
+    mensal_cat = (
+        df.groupby(["ano_mes", "categoria"])["gwh"]
+        .sum()
+        .unstack(fill_value=0)
+        .sort_index()
+    )
+    penetracao_mensal = []
+    for periodo in mensal_cat.index:
+        gd_c = float(mensal_cat.loc[periodo].get("GD Consumo Próprio", 0))
+        reg_c = float(mensal_cat.loc[periodo].get("Mercado Cativo", 0))
+        denom = gd_c + reg_c
+        penetracao_mensal.append({
+            "periodo": periodo,
+            "penetracao": round(gd_c / denom * 100, 1) if denom > 0 else 0,
+        })
+
+    # Penetração anual por distribuidora (top 15)
+    top15_pen = [d["sigla"] for d in sorted(distribuidoras, key=lambda x: x["penetracao"], reverse=True)[:15]]
+    df_pen = df[df["SigAgenteDistribuidora"].isin(top15_pen)]
+    pen_dist_anual = (
+        df_pen.groupby(["ano", "SigAgenteDistribuidora", "categoria"])["gwh"]
+        .sum()
+        .reset_index()
+    )
+    pen_pivot = pen_dist_anual.pivot_table(
+        index=["ano", "SigAgenteDistribuidora"],
+        columns="categoria",
+        values="gwh",
+        fill_value=0,
+    ).reset_index()
+    pen_evo = []
+    for ano in sorted(pen_pivot["ano"].unique()):
+        row = {"ano": int(ano)}
+        for sigla in top15_pen:
+            sub = pen_pivot[(pen_pivot["ano"] == ano) & (pen_pivot["SigAgenteDistribuidora"] == sigla)]
+            if len(sub):
+                gd_c = float(sub["GD Consumo Próprio"].iloc[0]) if "GD Consumo Próprio" in sub.columns else 0
+                reg_c = float(sub["Mercado Cativo"].iloc[0]) if "Mercado Cativo" in sub.columns else 0
+                denom = gd_c + reg_c
+                row[sigla] = round(gd_c / denom * 100, 1) if denom > 0 else 0
+            else:
+                row[sigla] = 0
+        pen_evo.append(row)
+
     return {
         "ano_referencia": int(ano_ref),
         "categorias": categorias,
@@ -240,6 +304,9 @@ def gerar_mercado_distribuidora(df: pd.DataFrame) -> dict:
         "evolucao_dist_gd": evolucao_dist_gd,
         "classes_gd": classes_gd,
         "proporcao_anual": proporcao_anual,
+        "penetracao_anual": penetracao_anual,
+        "penetracao_mensal": penetracao_mensal,
+        "penetracao_dist": {"siglas": top15_pen, "evolucao": pen_evo},
     }
 
 

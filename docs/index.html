@@ -416,6 +416,14 @@
                 <div class="chart-title">Evolução Mensal — GD Compensada vs Injetada (GWh)</div>
                 <div class="chart-wrap tall"><canvas id="chart-mercado-gd-mensal"></canvas></div>
             </div>
+            <div class="chart-box full">
+                <div class="chart-title">Penetração da GD — % do Consumo Regulado Atendido por GD</div>
+                <div class="chart-wrap tall"><canvas id="chart-penetracao"></canvas></div>
+            </div>
+            <div class="chart-box full">
+                <div class="chart-title">Penetração da GD por Distribuidora (Top 15)</div>
+                <div class="chart-wrap tall"><canvas id="chart-penetracao-dist"></canvas></div>
+            </div>
             <div class="chart-box">
                 <div class="chart-title">GD Compensada por Classe de Consumo</div>
                 <div class="chart-wrap"><canvas id="chart-mercado-classe"></canvas></div>
@@ -443,6 +451,7 @@
                         <th class="num">GD Comp. (GWh)</th>
                         <th class="num">GD Inj. (GWh)</th>
                         <th class="num">% GD</th>
+                        <th class="num">Penetração</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -1121,11 +1130,18 @@ function renderMercado() {
     const lastFull = m.proporcao_anual.filter(p => p.ano <= m.ano_referencia).pop();
     const prevYear = m.proporcao_anual.filter(p => p.ano === lastFull.ano - 1).pop();
     const gdGrowth = lastFull && prevYear ? (lastFull.pct_gd - prevYear.pct_gd).toFixed(1) : '?';
+    const penLast = m.penetracao_anual.filter(p => p.ano <= m.ano_referencia).pop();
+    const penPrev = m.penetracao_anual.filter(p => p.ano === penLast.ano - 1).pop();
+    const penGrowth = penLast && penPrev ? (penLast.penetracao - penPrev.penetracao).toFixed(1) : '?';
 
     document.getElementById('kpi-mercado').innerHTML = `
         <div class="kpi-card">
-            <div class="kpi-value">${lastFull.pct_gd}%</div>
-            <div class="kpi-label">GD no Mercado (${lastFull.ano})</div>
+            <div class="kpi-value">${penLast.penetracao}%</div>
+            <div class="kpi-label">Penetração GD (${penLast.ano})</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">+${penGrowth}pp</div>
+            <div class="kpi-label">Avanço ${penLast.ano - 1}-${penLast.ano}</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-value">${lastFull.pct_cativo}%</div>
@@ -1134,10 +1150,6 @@ function renderMercado() {
         <div class="kpi-card">
             <div class="kpi-value">${lastFull.pct_livre}%</div>
             <div class="kpi-label">Mercado Livre</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-value">+${gdGrowth}pp</div>
-            <div class="kpi-label">Avanço GD ${lastFull.ano - 1}-${lastFull.ano}</div>
         </div>
     `;
 
@@ -1227,6 +1239,68 @@ function renderMercado() {
         }
     });
 
+    // === Penetração da GD ===
+    // Evolução anual + mensal combinada
+    const penAnual = m.penetracao_anual.filter(p => p.ano <= m.ano_referencia);
+    const penMensal = m.penetracao_mensal;
+    const penMensalSampled = penMensal.filter((_, i) => i % 2 === 0 || i === penMensal.length - 1);
+    charts.penetracao = new Chart(document.getElementById('chart-penetracao'), {
+        type: 'line',
+        data: {
+            labels: penMensalSampled.map(p => p.periodo),
+            datasets: [{
+                label: 'Penetração GD (%)',
+                data: penMensalSampled.map(p => p.penetracao),
+                borderColor: '#00d4aa',
+                backgroundColor: '#00d4aa20',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 1,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => `Penetração: ${ctx.raw}%` } },
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 20, maxRotation: 45 } },
+                y: { title: { display: true, text: '% do consumo regulado' }, min: 0 },
+            },
+        }
+    });
+
+    // Penetração por distribuidora (top 15)
+    const penDist = m.penetracao_dist;
+    const penEvo = penDist.evolucao.filter(r => r.ano <= m.ano_referencia);
+    charts.penetracaoDist = new Chart(document.getElementById('chart-penetracao-dist'), {
+        type: 'line',
+        data: {
+            labels: penEvo.map(r => r.ano),
+            datasets: penDist.siglas.slice(0, 10).map((sigla, i) => ({
+                label: sigla,
+                data: penEvo.map(r => r[sigla] || 0),
+                borderColor: COLORS[i],
+                tension: 0.3,
+                pointRadius: 3,
+            }))
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                y: { title: { display: true, text: '% penetração' }, min: 0 },
+            },
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12 } },
+                tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}%` } },
+            }
+        }
+    });
+
     // GD por classe de consumo
     const classesGD = m.classes_gd.slice(0, 8);
     charts.mercadoClasse = new Chart(document.getElementById('chart-mercado-classe'), {
@@ -1296,6 +1370,7 @@ function renderMercado() {
                 <td class="num">${fmtNum(d['GD Compensada'] || 0)}</td>
                 <td class="num">${fmtNum(d['GD Injetada'] || 0)}</td>
                 <td class="num" style="color:${d.pct_gd > 15 ? 'var(--accent)' : d.pct_gd > 8 ? 'var(--accent3)' : 'var(--text)'}">${d.pct_gd}%</td>
+                <td class="num" style="color:${d.penetracao > 25 ? 'var(--accent)' : d.penetracao > 15 ? 'var(--accent3)' : 'var(--text)'}; font-weight:${d.penetracao > 25 ? '700' : '400'}">${d.penetracao}%</td>
             </tr>
         `).join('');
     }
