@@ -25,6 +25,28 @@ METRICAS_ENERGIA = [
     "Energia Consumida (kWh)",
 ]
 
+# Mercado Alvo: B1+B2+B3, excluindo subclasses específicas
+SUBGRUPOS_ALVO = ["B1", "B2", "B3"]
+# Subclasses a excluir (match parcial, case-insensitive)
+SUBCLASSES_EXCLUIR = [
+    "residencial baixa renda",
+    "residencial tarifa social",
+    "cooperativa de eletrifica",  # cooperativa de eletrificação rural
+    "irrigação rural",            # serviço público de irrigação rural
+    "irrigacao rural",            # sem acento
+]
+
+
+def is_mercado_alvo(subgrupo, subclasse):
+    """Retorna True se o registro pertence ao mercado alvo."""
+    if str(subgrupo) not in SUBGRUPOS_ALVO:
+        return False
+    sc_lower = str(subclasse).lower()
+    for excl in SUBCLASSES_EXCLUIR:
+        if excl in sc_lower:
+            return False
+    return True
+
 
 def carregar_samp() -> pd.DataFrame:
     """Carrega e concatena CSVs SAMP de todos os anos."""
@@ -45,6 +67,8 @@ def carregar_samp() -> pd.DataFrame:
                 "NomAgenteDistribuidora",
                 "NomTipoMercado",
                 "DscClasseConsumoMercado",
+                "DscSubGrupoTarifario",
+                "DscSubClasseConsumidor",
                 "DscOpcaoEnergia",
                 "DscDetalheMercado",
                 "DatCompetencia",
@@ -294,6 +318,103 @@ def gerar_mercado_distribuidora(df: pd.DataFrame) -> dict:
                 row[sigla] = 0
         pen_evo.append(row)
 
+    # === 8. Penetração Mercado Alvo ===
+    # Filtrar registros do mercado alvo (B1+B2+B3 menos exclusões)
+    print("  Calculando penetração do Mercado Alvo...")
+    df["mercado_alvo"] = df.apply(
+        lambda r: is_mercado_alvo(r.get("DscSubGrupoTarifario", ""), r.get("DscSubClasseConsumidor", "")),
+        axis=1,
+    )
+    df_alvo = df[df["mercado_alvo"]]
+
+    # Classificar mercado alvo
+    df_alvo_cat = df_alvo.copy()
+    df_alvo_cat["categoria"] = df_alvo_cat.apply(classificar_mercado, axis=1)
+    df_alvo_cat["gwh"] = df_alvo_cat["VlrMercado"] / 1_000_000
+
+    # Penetração anual mercado alvo
+    alvo_anual = (
+        df_alvo_cat.groupby(["ano", "categoria"])["gwh"]
+        .sum()
+        .unstack(fill_value=0)
+        .sort_index()
+        .round(1)
+    )
+    pen_alvo_anual = []
+    for ano in alvo_anual.index:
+        consumo_gd = float(alvo_anual.loc[ano].get("GD Consumo Próprio", 0))
+        consumo_reg = float(alvo_anual.loc[ano].get("Mercado Cativo", 0))
+        denom = consumo_gd + consumo_reg
+        pen_alvo_anual.append({
+            "ano": int(ano),
+            "penetracao": round(consumo_gd / denom * 100, 1) if denom > 0 else 0,
+            "consumo_gd_gwh": round(consumo_gd, 1),
+            "consumo_reg_gwh": round(consumo_reg, 1),
+        })
+
+    # Penetração mensal mercado alvo
+    alvo_mensal_cat = (
+        df_alvo_cat.groupby(["ano_mes", "categoria"])["gwh"]
+        .sum()
+        .unstack(fill_value=0)
+        .sort_index()
+    )
+    pen_alvo_mensal = []
+    for periodo in alvo_mensal_cat.index:
+        gd_c = float(alvo_mensal_cat.loc[periodo].get("GD Consumo Próprio", 0))
+        reg_c = float(alvo_mensal_cat.loc[periodo].get("Mercado Cativo", 0))
+        denom = gd_c + reg_c
+        pen_alvo_mensal.append({
+            "periodo": periodo,
+            "penetracao": round(gd_c / denom * 100, 1) if denom > 0 else 0,
+        })
+
+    # Penetração mercado alvo por distribuidora (top 15)
+    top15_pen_alvo = [d["sigla"] for d in sorted(distribuidoras, key=lambda x: x.get("penetracao", 0), reverse=True)[:15]]
+    df_alvo_pen = df_alvo_cat[df_alvo_cat["SigAgenteDistribuidora"].isin(top15_pen_alvo)]
+    pen_alvo_dist = (
+        df_alvo_pen.groupby(["ano", "SigAgenteDistribuidora", "categoria"])["gwh"]
+        .sum()
+        .reset_index()
+    )
+    pen_alvo_pivot = pen_alvo_dist.pivot_table(
+        index=["ano", "SigAgenteDistribuidora"],
+        columns="categoria",
+        values="gwh",
+        fill_value=0,
+    ).reset_index()
+    pen_alvo_evo = []
+    for ano in sorted(pen_alvo_pivot["ano"].unique()):
+        row = {"ano": int(ano)}
+        for sigla in top15_pen_alvo:
+            sub = pen_alvo_pivot[(pen_alvo_pivot["ano"] == ano) & (pen_alvo_pivot["SigAgenteDistribuidora"] == sigla)]
+            if len(sub):
+                gd_c = float(sub["GD Consumo Próprio"].iloc[0]) if "GD Consumo Próprio" in sub.columns else 0
+                reg_c = float(sub["Mercado Cativo"].iloc[0]) if "Mercado Cativo" in sub.columns else 0
+                denom = gd_c + reg_c
+                row[sigla] = round(gd_c / denom * 100, 1) if denom > 0 else 0
+            else:
+                row[sigla] = 0
+        pen_alvo_evo.append(row)
+
+    # Penetração mercado alvo por distribuidora (tabela)
+    df_alvo_ref = df_alvo_cat[df_alvo_cat["ano"] == ano_ref]
+    alvo_dist_ref = (
+        df_alvo_ref.groupby(["SigAgenteDistribuidora", "categoria"])["gwh"]
+        .sum()
+        .unstack(fill_value=0)
+    )
+    dist_pen_alvo = {}
+    for sigla in alvo_dist_ref.index:
+        gd_c = float(alvo_dist_ref.loc[sigla].get("GD Consumo Próprio", 0))
+        reg_c = float(alvo_dist_ref.loc[sigla].get("Mercado Cativo", 0))
+        denom = gd_c + reg_c
+        dist_pen_alvo[sigla] = round(gd_c / denom * 100, 1) if denom > 0 else 0
+
+    # Adicionar penetracao_alvo a cada distribuidora
+    for d in distribuidoras:
+        d["penetracao_alvo"] = dist_pen_alvo.get(d["sigla"], 0)
+
     return {
         "ano_referencia": int(ano_ref),
         "categorias": categorias,
@@ -307,6 +428,9 @@ def gerar_mercado_distribuidora(df: pd.DataFrame) -> dict:
         "penetracao_anual": penetracao_anual,
         "penetracao_mensal": penetracao_mensal,
         "penetracao_dist": {"siglas": top15_pen, "evolucao": pen_evo},
+        "penetracao_alvo_anual": pen_alvo_anual,
+        "penetracao_alvo_mensal": pen_alvo_mensal,
+        "penetracao_alvo_dist": {"siglas": top15_pen_alvo, "evolucao": pen_alvo_evo},
     }
 
 

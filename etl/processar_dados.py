@@ -52,6 +52,86 @@ MODALIDADES_MAP = {
     "Compartilhada": "Geração compartilhada",
 }
 
+# Faixas de potência para gráficos de barras
+FAIXAS_POTENCIA = [
+    ("1-10 kW", 1, 10),
+    ("10-25 kW", 10, 25),
+    ("25-75 kW", 25, 75),
+    ("75 kW-1 MW", 75, 1000),
+    ("1-2,5 MW", 1000, 2500),
+    ("> 2,5 MW", 2500, float("inf")),
+]
+
+CLASSES_PRINCIPAIS = ["Residencial", "Comercial", "Industrial", "Rural"]
+
+
+def classificar_faixa(kw: float) -> str:
+    for label, low, high in FAIXAS_POTENCIA:
+        if low <= kw < high:
+            return label
+    return "> 2,5 MW" if kw >= 2500 else "1-10 kW"
+
+
+def agrupar_classe(classe: str) -> str:
+    return classe if classe in CLASSES_PRINCIPAIS else "Outras"
+
+
+def gerar_faixas_por_classe(df: pd.DataFrame) -> dict:
+    """Gera dados de faixa de potência segmentados por classe agrupada."""
+    tmp = df.copy()
+    tmp["faixa"] = tmp["MdaPotenciaInstaladaKW"].apply(classificar_faixa)
+    tmp["classe_agrup"] = tmp["DscClasseConsumo"].astype(str).apply(agrupar_classe)
+
+    labels = [f[0] for f in FAIXAS_POTENCIA]
+    classes = CLASSES_PRINCIPAIS + ["Outras"]
+
+    pot = tmp.groupby(["faixa", "classe_agrup"])["potencia_mw"].sum().unstack(fill_value=0)
+    qtd = tmp.groupby(["faixa", "classe_agrup"]).size().unstack(fill_value=0)
+
+    potencia = {}
+    quantidade = {}
+    for c in classes:
+        potencia[c] = [
+            round(float(pot.loc[f, c]), 1) if f in pot.index and c in pot.columns else 0
+            for f in labels
+        ]
+        quantidade[c] = [
+            int(qtd.loc[f, c]) if f in qtd.index and c in qtd.columns else 0
+            for f in labels
+        ]
+
+    return {"labels": labels, "potencia": potencia, "quantidade": quantidade}
+
+
+def gerar_breakdowns(df: pd.DataFrame) -> dict:
+    """Gera breakdowns compactos (KPIs + faixas + classes/modalidades/portes/fontes)."""
+    result = {
+        "total_mw": round(float(df["potencia_mw"].sum()), 1),
+        "total_conexoes": len(df),
+        "total_ucs_credito": int(df["QtdUCRecebeCredito"].sum()),
+        "faixas": gerar_faixas_por_classe(df),
+    }
+
+    for campo, col_name in [
+        ("classes", "DscClasseConsumo"),
+        ("modalidades", "modalidade"),
+        ("portes", "DscPorte"),
+        ("fontes", "fonte"),
+    ]:
+        grp = (
+            df.groupby(col_name)
+            .agg(conexoes=("potencia_mw", "count"), potencia_mw=("potencia_mw", "sum"))
+            .sort_values("potencia_mw", ascending=False)
+        )
+        grp["potencia_mw"] = grp["potencia_mw"].round(1)
+        key_name = campo.rstrip("s") if campo != "classes" else "classe"
+        result[campo] = [
+            {key_name: str(k), "conexoes": int(v["conexoes"]), "potencia_mw": float(v["potencia_mw"])}
+            for k, v in grp.iterrows()
+        ]
+
+    return result
+
 
 def carregar_csv() -> pd.DataFrame:
     """Carrega CSV principal com tipos otimizados."""
@@ -226,6 +306,37 @@ def gerar_resumo_geral(df: pd.DataFrame) -> dict:
     mw_ant = df[df["ano"] == ano_ant]["potencia_mw"].sum()
     yoy = round((mw_ref / mw_ant - 1) * 100, 1) if mw_ant > 0 else 0
 
+    # Faixas de potência por classe (nível nacional)
+    print("  Gerando faixas de potência por classe...")
+    faixas = gerar_faixas_por_classe(df)
+
+    # Per-UF breakdowns para filtros
+    print("  Gerando breakdowns por UF...")
+    ufs_list = sorted([u for u in df["SigUF"].dropna().astype(str).unique().tolist() if u != "nan"])
+    por_uf = {}
+    for uf in ufs_list:
+        por_uf[uf] = gerar_breakdowns(df[df["SigUF"] == uf])
+
+    # Per-distribuidora breakdowns (top 50)
+    print("  Gerando breakdowns por distribuidora...")
+    dist_mw = (
+        df.groupby("NomAgente")["potencia_mw"].sum().sort_values(ascending=False)
+    )
+    top_dists = dist_mw.head(50).index.tolist()
+    por_distribuidora = {}
+    dist_uf_map = {}
+    for dist_name in top_dists:
+        df_dist = df[df["NomAgente"] == dist_name]
+        por_distribuidora[dist_name] = gerar_breakdowns(df_dist)
+        # UF principal da distribuidora (moda)
+        uf_mode = df_dist["SigUF"].astype(str).mode()
+        dist_uf_map[dist_name] = uf_mode.iloc[0] if len(uf_mode) > 0 else ""
+
+    dists_list = [
+        {"nome": d, "potencia_mw": round(float(dist_mw[d]), 1)}
+        for d in top_dists
+    ]
+
     return {
         "kpis": {
             "total_mw": total_mw,
@@ -241,6 +352,12 @@ def gerar_resumo_geral(df: pd.DataFrame) -> dict:
         "modalidades": modalidades,
         "portes": portes,
         "classes": classes,
+        "faixas": faixas,
+        "listas_uf": ufs_list,
+        "listas_distribuidora": dists_list,
+        "dist_uf_map": dist_uf_map,
+        "por_uf": por_uf,
+        "por_distribuidora": por_distribuidora,
     }
 
 
@@ -396,6 +513,7 @@ def gerar_empresas_top(df: pd.DataFrame) -> dict:
             empreendimentos=("potencia_mw", "count"),
             ufs=("SigUF", "nunique"),
             lista_ufs=("SigUF", lambda x: ",".join(sorted(x.unique().astype(str)))),
+            lista_dists=("NomAgente", lambda x: ",".join(sorted(x.unique().astype(str)))),
         )
         .sort_values("potencia_mw", ascending=False)
         .head(100)
@@ -410,6 +528,7 @@ def gerar_empresas_top(df: pd.DataFrame) -> dict:
             "empreendimentos": int(row["empreendimentos"]),
             "qtd_ufs": int(row["ufs"]),
             "ufs": row["lista_ufs"],
+            "distribuidoras": row["lista_dists"],
         })
 
     # Concentração de mercado (Pareto)

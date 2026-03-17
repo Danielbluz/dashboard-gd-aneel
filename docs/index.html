@@ -214,6 +214,7 @@
             gap: 12px;
             flex-wrap: wrap;
             margin-bottom: 16px;
+            align-items: center;
         }
         .filters select {
             padding: 8px 12px;
@@ -222,6 +223,54 @@
             border-radius: 8px;
             color: var(--text);
             font-size: 0.82rem;
+            cursor: pointer;
+            min-width: 180px;
+        }
+        .filters select:focus { border-color: var(--accent); outline: none; }
+        .filters label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .filter-group { display: flex; flex-direction: column; gap: 4px; }
+        .filter-active-badge {
+            display: inline-block;
+            background: var(--accent);
+            color: var(--bg);
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .toggle-group { display: flex; align-items: center; gap: 8px; }
+        .toggle-switch {
+            position: relative;
+            width: 40px; height: 22px;
+            background: var(--border);
+            border-radius: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .toggle-switch.active { background: var(--accent); }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px; left: 3px;
+            width: 16px; height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+        .toggle-switch.active::after { transform: translateX(18px); }
+        .toggle-label { font-size: 0.8rem; color: var(--text-muted); cursor: pointer; }
+        .toggle-label.active { color: var(--accent); font-weight: 600; }
+        .toggle-info {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            max-width: 320px;
+            line-height: 1.3;
         }
 
         /* Map container */
@@ -272,7 +321,7 @@
 
 <div class="header">
     <h1>Dashboard GD Brasil</h1>
-    <p>Micro e Minigeração Distribuída — Dados Abertos ANEEL</p>
+    <p>Micro e Minigeração Distribuída — Dados Abertos ANEEL — Elaboração <a href="https://www.linkedin.com/in/danielbluz/" target="_blank" style="color:var(--accent);text-decoration:none">Daniel Luz</a></p>
 </div>
 
 <nav class="tabs" id="tabs">
@@ -288,6 +337,17 @@
 <div class="content">
     <!-- TAB: Visão Geral -->
     <div class="tab-panel active" id="visao-geral">
+        <div class="filters" id="filtros-visao">
+            <div class="filter-group">
+                <label>Estado</label>
+                <select id="filtro-vg-uf"><option value="">Todos os estados</option></select>
+            </div>
+            <div class="filter-group">
+                <label>Distribuidora</label>
+                <select id="filtro-vg-dist"><option value="">Todas as distribuidoras</option></select>
+            </div>
+            <span id="filtro-vg-badge" style="display:none" class="filter-active-badge" title="Limpar filtros">Filtrado</span>
+        </div>
         <div class="kpi-grid" id="kpi-cards"></div>
         <div class="chart-grid">
             <div class="chart-box full">
@@ -295,8 +355,12 @@
                 <div class="chart-wrap tall"><canvas id="chart-evolucao"></canvas></div>
             </div>
             <div class="chart-box full">
-                <div class="chart-title">Evolução por Fonte de Energia (Potência Acumulada)</div>
-                <div class="chart-wrap tall"><canvas id="chart-fontes-evo"></canvas></div>
+                <div class="chart-title">Potência Instalada por Faixa de Potência e Classe</div>
+                <div class="chart-wrap tall"><canvas id="chart-faixa-potencia"></canvas></div>
+            </div>
+            <div class="chart-box full">
+                <div class="chart-title">Quantidade de Usinas por Faixa de Potência e Classe</div>
+                <div class="chart-wrap tall"><canvas id="chart-faixa-quantidade"></canvas></div>
             </div>
             <div class="chart-box">
                 <div class="chart-title">Distribuição por Modalidade</div>
@@ -423,6 +487,22 @@
 
     <!-- TAB: Mercado -->
     <div class="tab-panel" id="mercado">
+        <div class="filters" id="filtros-mercado">
+            <div class="filter-group">
+                <label>Estado</label>
+                <select id="filtro-merc-uf"><option value="">Todos os estados</option></select>
+            </div>
+            <div class="filter-group">
+                <label>Distribuidora</label>
+                <select id="filtro-merc-dist"><option value="">Todas as distribuidoras</option></select>
+            </div>
+            <span id="filtro-merc-badge" style="display:none" class="filter-active-badge" title="Limpar filtros">Filtrado</span>
+            <div class="toggle-group" style="margin-left:auto">
+                <span class="toggle-label" id="toggle-alvo-label">Mercado Alvo</span>
+                <div class="toggle-switch" id="toggle-alvo" title="Filtrar penetração pelo Mercado Alvo (B1+B2+B3, excl. baixa renda, irrigação e cooperativa rural)"></div>
+                <div class="toggle-info" id="toggle-alvo-info" style="display:none">B1+B2+B3, excluindo baixa renda, tarifa social, irrigação rural e cooperativa de eletrificação rural</div>
+            </div>
+        </div>
         <div class="kpi-grid" id="kpi-mercado"></div>
         <div class="chart-grid">
             <div class="chart-box full">
@@ -482,6 +562,17 @@
 
     <!-- TAB: Empresas -->
     <div class="tab-panel" id="empresas">
+        <div class="filters" id="filtros-empresas">
+            <div class="filter-group">
+                <label>Estado</label>
+                <select id="filtro-emp-uf"><option value="">Todos os estados</option></select>
+            </div>
+            <div class="filter-group">
+                <label>Distribuidora</label>
+                <select id="filtro-emp-dist"><option value="">Todas as distribuidoras</option></select>
+            </div>
+            <span id="filtro-emp-badge" style="display:none" class="filter-active-badge" title="Limpar filtros">Filtrado</span>
+        </div>
         <div class="chart-grid">
             <div class="chart-box full">
                 <div class="chart-title">Concentração de Mercado (Top 100 Empresas)</div>
@@ -581,110 +672,195 @@ async function loadAllData() {
     return DATA;
 }
 
+// ===== FILTER HELPERS =====
+const CLASSE_COLORS = {
+    'Residencial': '#3b82f6',
+    'Comercial': '#00d4aa',
+    'Industrial': '#f59e0b',
+    'Rural': '#10b981',
+    'Outras': '#8b5cf6',
+};
+const CLASSE_ORDER = ['Residencial', 'Comercial', 'Industrial', 'Rural', 'Outras'];
+
+function populateFilterDropdowns() {
+    const resumo = DATA.resumo;
+    const ufs = resumo.listas_uf || [];
+    const dists = resumo.listas_distribuidora || [];
+
+    // Populate all UF selects
+    ['filtro-vg-uf', 'filtro-merc-uf', 'filtro-emp-uf'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        ufs.forEach(uf => {
+            const opt = document.createElement('option');
+            opt.value = uf; opt.textContent = uf;
+            sel.appendChild(opt);
+        });
+    });
+
+    // Populate all distribuidora selects
+    ['filtro-vg-dist', 'filtro-merc-dist', 'filtro-emp-dist'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        dists.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.nome;
+            opt.textContent = d.nome.length > 35 ? d.nome.slice(0,35)+'...' : d.nome;
+            sel.appendChild(opt);
+        });
+    });
+}
+
+function getFilteredData(uf, dist) {
+    const resumo = DATA.resumo;
+    if (dist && resumo.por_distribuidora[dist]) return resumo.por_distribuidora[dist];
+    if (uf && resumo.por_uf[uf]) return resumo.por_uf[uf];
+    return null; // national
+}
+
 // ===== TAB: VISÃO GERAL =====
-function renderVisaoGeral() {
-    const k = DATA.resumo.kpis;
+function renderVisaoGeral(filterUF, filterDist) {
+    const isFiltered = !!(filterUF || filterDist);
+    const filteredData = getFilteredData(filterUF, filterDist);
+
+    // Determine data source for KPIs and breakdowns
+    const kpis = filteredData
+        ? { total_mw: filteredData.total_mw, total_conexoes: filteredData.total_conexoes, total_ucs_credito: filteredData.total_ucs_credito }
+        : DATA.resumo.kpis;
+    const faixas = filteredData ? filteredData.faixas : DATA.resumo.faixas;
+    const mods = filteredData ? filteredData.modalidades : DATA.resumo.modalidades;
+    const portes = filteredData ? filteredData.portes : DATA.resumo.portes;
+    const fontes = filteredData ? filteredData.fontes : DATA.resumo.fontes;
+    const classes = filteredData ? filteredData.classes : DATA.resumo.classes;
+
+    // Badge
+    const badge = document.getElementById('filtro-vg-badge');
+    badge.style.display = isFiltered ? 'inline-block' : 'none';
+    badge.textContent = filterDist ? filterDist.slice(0,25) : (filterUF || '');
 
     // KPI Cards
-    document.getElementById('kpi-cards').innerHTML = `
+    const kpiHtml = `
         <div class="kpi-card">
-            <div class="kpi-value">${fmtMW(k.total_mw)}</div>
+            <div class="kpi-value">${fmtMW(kpis.total_mw)}</div>
             <div class="kpi-label">Potência Instalada</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-value">${fmt(k.total_conexoes)}</div>
+            <div class="kpi-value">${fmt(kpis.total_conexoes)}</div>
             <div class="kpi-label">Conexões</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-value">${fmt(k.total_ucs_credito)}</div>
+            <div class="kpi-value">${fmt(kpis.total_ucs_credito)}</div>
             <div class="kpi-label">UCs com Crédito</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-value">+${k.crescimento_yoy_pct}%</div>
-            <div class="kpi-label">Crescimento ${k.ano_ref_yoy} vs ${k.ano_ref_yoy - 1}</div>
-        </div>
-    `;
+        </div>`;
+    const kpi4 = isFiltered
+        ? `<div class="kpi-card"><div class="kpi-value">${((kpis.total_mw / DATA.resumo.kpis.total_mw)*100).toFixed(1)}%</div><div class="kpi-label">% do Total Nacional</div></div>`
+        : `<div class="kpi-card"><div class="kpi-value">+${DATA.resumo.kpis.crescimento_yoy_pct}%</div><div class="kpi-label">Crescimento ${DATA.resumo.kpis.ano_ref_yoy} vs ${DATA.resumo.kpis.ano_ref_yoy - 1}</div></div>`;
+    document.getElementById('kpi-cards').innerHTML = kpiHtml + kpi4;
 
-    // Evolução mensal
-    const evo = DATA.resumo.evolucao_mensal;
-    // Amostrar para não poluir (1 a cada 3 meses)
-    const evoSampled = evo.filter((_, i) => i % 3 === 0 || i === evo.length - 1);
-    charts.evolucao = new Chart(document.getElementById('chart-evolucao'), {
-        type: 'line',
+    // Destroy existing charts if re-rendering
+    ['evolucao','faixaPotencia','faixaQuantidade','modalidade','porte','fonte','classe'].forEach(k => {
+        if (charts[k]) { charts[k].destroy(); charts[k] = null; }
+    });
+
+    // Evolução mensal (only for national view)
+    const evoCanvas = document.getElementById('chart-evolucao');
+    if (!isFiltered) {
+        evoCanvas.closest('.chart-box').style.display = '';
+        const evo = DATA.resumo.evolucao_mensal;
+        const evoSampled = evo.filter((_, i) => i % 3 === 0 || i === evo.length - 1);
+        charts.evolucao = new Chart(evoCanvas, {
+            type: 'line',
+            data: {
+                labels: evoSampled.map(e => e.periodo),
+                datasets: [{
+                    label: 'Potência Acumulada (MW)',
+                    data: evoSampled.map(e => e.potencia_acumulada_mw),
+                    borderColor: COLORS[0],
+                    backgroundColor: COLORS[0] + '20',
+                    fill: true, tension: 0.3, yAxisID: 'y',
+                }, {
+                    label: 'Novas Conexões/mês',
+                    data: evoSampled.map(e => e.novas_conexoes),
+                    borderColor: COLORS[1],
+                    backgroundColor: COLORS[1] + '40',
+                    type: 'bar', yAxisID: 'y1',
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { ticks: { maxTicksLimit: 20, maxRotation: 45 } },
+                    y: { position: 'left', title: { display: true, text: 'MW Acumulado' } },
+                    y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Novas Conexões' } },
+                }
+            }
+        });
+    } else {
+        evoCanvas.closest('.chart-box').style.display = 'none';
+    }
+
+    // Faixa de Potência × Classe — Potência (MW)
+    charts.faixaPotencia = new Chart(document.getElementById('chart-faixa-potencia'), {
+        type: 'bar',
         data: {
-            labels: evoSampled.map(e => e.periodo),
-            datasets: [{
-                label: 'Potência Acumulada (MW)',
-                data: evoSampled.map(e => e.potencia_acumulada_mw),
-                borderColor: COLORS[0],
-                backgroundColor: COLORS[0] + '20',
-                fill: true,
-                tension: 0.3,
-                yAxisID: 'y',
-            }, {
-                label: 'Novas Conexões/mês',
-                data: evoSampled.map(e => e.novas_conexoes),
-                borderColor: COLORS[1],
-                backgroundColor: COLORS[1] + '40',
-                type: 'bar',
-                yAxisID: 'y1',
-            }]
+            labels: faixas.labels,
+            datasets: CLASSE_ORDER.map(c => ({
+                label: c,
+                data: faixas.potencia[c] || faixas.labels.map(() => 0),
+                backgroundColor: CLASSE_COLORS[c] + 'cc',
+                borderColor: CLASSE_COLORS[c],
+                borderWidth: 1,
+            }))
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
+            responsive: true, maintainAspectRatio: false,
             scales: {
-                x: { ticks: { maxTicksLimit: 20, maxRotation: 45 } },
-                y: { position: 'left', title: { display: true, text: 'MW Acumulado' } },
-                y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Novas Conexões' } },
+                x: { stacked: true },
+                y: { stacked: true, title: { display: true, text: 'Potência (MW)' } },
+            },
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtNum(ctx.raw)} MW` } },
             }
         }
     });
 
-    // Evolução por fonte (área empilhada)
-    const evoFonte = DATA.resumo.evolucao_fonte;
-    const fontesNames = Object.keys(evoFonte[0] || {}).filter(k => k !== 'periodo');
-    const evoFonteSampled = evoFonte.filter((_, i) => i % 3 === 0 || i === evoFonte.length - 1);
-    charts.fontesEvo = new Chart(document.getElementById('chart-fontes-evo'), {
-        type: 'line',
+    // Faixa de Potência × Classe — Quantidade
+    charts.faixaQuantidade = new Chart(document.getElementById('chart-faixa-quantidade'), {
+        type: 'bar',
         data: {
-            labels: evoFonteSampled.map(e => e.periodo),
-            datasets: fontesNames.map((f, i) => ({
-                label: f,
-                data: evoFonteSampled.map(e => e[f] || 0),
-                borderColor: COLORS[i % COLORS.length],
-                backgroundColor: COLORS[i % COLORS.length] + '30',
-                fill: true,
-                tension: 0.3,
+            labels: faixas.labels,
+            datasets: CLASSE_ORDER.map(c => ({
+                label: c,
+                data: faixas.quantidade[c] || faixas.labels.map(() => 0),
+                backgroundColor: CLASSE_COLORS[c] + 'cc',
+                borderColor: CLASSE_COLORS[c],
+                borderWidth: 1,
             }))
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
+            responsive: true, maintainAspectRatio: false,
             scales: {
-                x: { ticks: { maxTicksLimit: 20, maxRotation: 45 } },
-                y: { stacked: true, title: { display: true, text: 'MW Acumulado' } },
+                x: { stacked: true },
+                y: { stacked: true, title: { display: true, text: 'Quantidade de Usinas' } },
             },
-            plugins: { legend: { position: 'top' } }
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmt(ctx.raw)}` } },
+            }
         }
     });
 
     // Donut: Modalidade
-    const mods = DATA.resumo.modalidades;
     charts.modalidade = new Chart(document.getElementById('chart-modalidade'), {
         type: 'doughnut',
         data: {
             labels: mods.map(m => m.modalidade),
-            datasets: [{
-                data: mods.map(m => m.potencia_mw),
-                backgroundColor: COLORS.slice(0, mods.length),
-            }]
+            datasets: [{ data: mods.map(m => m.potencia_mw), backgroundColor: COLORS.slice(0, mods.length) }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             plugins: {
                 legend: { position: 'bottom', labels: { padding: 12 } },
                 tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtMW(ctx.raw)}` } }
@@ -693,19 +869,14 @@ function renderVisaoGeral() {
     });
 
     // Donut: Porte
-    const portes = DATA.resumo.portes;
     charts.porte = new Chart(document.getElementById('chart-porte'), {
         type: 'doughnut',
         data: {
             labels: portes.map(p => p.porte),
-            datasets: [{
-                data: portes.map(p => p.potencia_mw),
-                backgroundColor: [COLORS[0], COLORS[1], COLORS[2]],
-            }]
+            datasets: [{ data: portes.map(p => p.potencia_mw), backgroundColor: [COLORS[0], COLORS[1], COLORS[2]] }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             plugins: {
                 legend: { position: 'bottom' },
                 tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtMW(ctx.raw)}` } }
@@ -714,19 +885,14 @@ function renderVisaoGeral() {
     });
 
     // Donut: Fonte
-    const fontes = DATA.resumo.fontes;
     charts.fonte = new Chart(document.getElementById('chart-fonte'), {
         type: 'doughnut',
         data: {
             labels: fontes.map(f => f.fonte),
-            datasets: [{
-                data: fontes.map(f => f.potencia_mw),
-                backgroundColor: COLORS.slice(0, fontes.length),
-            }]
+            datasets: [{ data: fontes.map(f => f.potencia_mw), backgroundColor: COLORS.slice(0, fontes.length) }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             plugins: {
                 legend: { position: 'bottom' },
                 tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtMW(ctx.raw)}` } }
@@ -735,26 +901,56 @@ function renderVisaoGeral() {
     });
 
     // Bar: Classe de consumo
-    const classes = DATA.resumo.classes.slice(0, 8);
+    const classesTop = (classes || []).slice(0, 8);
     charts.classe = new Chart(document.getElementById('chart-classe'), {
         type: 'bar',
         data: {
-            labels: classes.map(c => c.classe),
+            labels: classesTop.map(c => c.classe),
             datasets: [{
                 label: 'Potência (MW)',
-                data: classes.map(c => c.potencia_mw),
+                data: classesTop.map(c => c.potencia_mw),
                 backgroundColor: COLORS[0] + '80',
                 borderColor: COLORS[0],
                 borderWidth: 1,
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             indexAxis: 'y',
             plugins: { legend: { display: false } },
             scales: { x: { title: { display: true, text: 'MW' } } }
         }
+    });
+}
+
+function setupVisaoGeralFilters() {
+    const ufSel = document.getElementById('filtro-vg-uf');
+    const distSel = document.getElementById('filtro-vg-dist');
+    const badge = document.getElementById('filtro-vg-badge');
+
+    function applyFilter() {
+        renderVisaoGeral(ufSel.value, distSel.value);
+    }
+
+    ufSel.addEventListener('change', () => {
+        // If UF selected, filter distribuidora dropdown to show only dists in that UF
+        if (ufSel.value) {
+            distSel.value = ''; // reset dist when UF changes
+            const map = DATA.resumo.dist_uf_map || {};
+            Array.from(distSel.options).forEach(opt => {
+                if (!opt.value) return;
+                opt.style.display = (map[opt.value] === ufSel.value) ? '' : 'none';
+            });
+        } else {
+            Array.from(distSel.options).forEach(opt => opt.style.display = '');
+        }
+        applyFilter();
+    });
+    distSel.addEventListener('change', applyFilter);
+    badge.addEventListener('click', () => {
+        ufSel.value = ''; distSel.value = '';
+        Array.from(distSel.options).forEach(opt => opt.style.display = '');
+        applyFilter();
     });
 }
 
@@ -1125,7 +1321,7 @@ function renderDistribuidoras() {
 
 // ===== TAB: EMPRESAS =====
 function renderEmpresas() {
-    const emps = DATA.empresas.empresas;
+    const allEmps = DATA.empresas.empresas;
     const pareto = DATA.empresas.pareto;
 
     // Pareto
@@ -1138,21 +1334,17 @@ function renderEmpresas() {
                 data: pareto.map(p => p.pct_acumulado),
                 borderColor: COLORS[0],
                 backgroundColor: COLORS[0] + '20',
-                fill: true,
-                tension: 0.3,
+                fill: true, tension: 0.3,
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
-            scales: {
-                y: { title: { display: true, text: '% do Total' }, max: 100 }
-            }
+            scales: { y: { title: { display: true, text: '% do Total' }, max: 100 } }
         }
     });
 
-    function renderTable(data) {
+    function renderTableEmpresas(data) {
         const tbody = document.querySelector('#table-empresas tbody');
         tbody.innerHTML = data.map((e, i) => `
             <tr>
@@ -1166,12 +1358,45 @@ function renderEmpresas() {
         `).join('');
     }
 
-    renderTable(emps);
+    function getFilteredEmpresas() {
+        const uf = document.getElementById('filtro-emp-uf').value;
+        const dist = document.getElementById('filtro-emp-dist').value;
+        const q = document.getElementById('busca-empresa').value.toLowerCase();
+        let filtered = allEmps;
+        if (uf) filtered = filtered.filter(e => e.ufs && e.ufs.split(',').includes(uf));
+        if (dist) filtered = filtered.filter(e => e.distribuidoras && e.distribuidoras.includes(dist));
+        if (q) filtered = filtered.filter(e => e.nome.toLowerCase().includes(q));
 
-    document.getElementById('busca-empresa').addEventListener('input', function() {
-        const q = this.value.toLowerCase();
-        const filtered = q ? emps.filter(e => e.nome.toLowerCase().includes(q)) : emps;
-        renderTable(filtered);
+        const badge = document.getElementById('filtro-emp-badge');
+        badge.style.display = (uf || dist) ? 'inline-block' : 'none';
+        badge.textContent = dist ? dist.slice(0,25) : (uf || '');
+
+        return filtered;
+    }
+
+    function applyEmpFilter() { renderTableEmpresas(getFilteredEmpresas()); }
+
+    renderTableEmpresas(allEmps);
+
+    document.getElementById('busca-empresa').addEventListener('input', applyEmpFilter);
+    document.getElementById('filtro-emp-uf').addEventListener('change', () => {
+        const uf = document.getElementById('filtro-emp-uf').value;
+        const distSel = document.getElementById('filtro-emp-dist');
+        distSel.value = '';
+        const map = DATA.resumo.dist_uf_map || {};
+        Array.from(distSel.options).forEach(opt => {
+            if (!opt.value) return;
+            opt.style.display = (!uf || map[opt.value] === uf) ? '' : 'none';
+        });
+        applyEmpFilter();
+    });
+    document.getElementById('filtro-emp-dist').addEventListener('change', applyEmpFilter);
+    document.getElementById('filtro-emp-badge').addEventListener('click', () => {
+        document.getElementById('filtro-emp-uf').value = '';
+        document.getElementById('filtro-emp-dist').value = '';
+        const distSel = document.getElementById('filtro-emp-dist');
+        Array.from(distSel.options).forEach(opt => opt.style.display = '');
+        applyEmpFilter();
     });
 }
 
@@ -1258,29 +1483,21 @@ function renderTecnologia() {
 }
 
 // ===== TAB: MERCADO =====
-function renderMercado() {
-    const m = DATA.mercado;
-    const MCOLORS = {
-        'Mercado Cativo': '#3b82f6',
-        'Mercado Livre': '#8b5cf6',
-        'GD Compensada': '#00d4aa',
-        'GD Injetada': '#f59e0b',
-        'GD Consumo Próprio': '#14b8a6',
-        'Outros': '#64748b',
-    };
+let mercadoAlvoAtivo = false;
 
-    // KPIs do último ano com dados completos
+function renderMercadoKPIs() {
+    const m = DATA.mercado;
+    const penData = mercadoAlvoAtivo ? m.penetracao_alvo_anual : m.penetracao_anual;
     const lastFull = m.proporcao_anual.filter(p => p.ano <= m.ano_referencia).pop();
-    const prevYear = m.proporcao_anual.filter(p => p.ano === lastFull.ano - 1).pop();
-    const gdGrowth = lastFull && prevYear ? (lastFull.pct_gd - prevYear.pct_gd).toFixed(1) : '?';
-    const penLast = m.penetracao_anual.filter(p => p.ano <= m.ano_referencia).pop();
-    const penPrev = m.penetracao_anual.filter(p => p.ano === penLast.ano - 1).pop();
+    const penLast = penData.filter(p => p.ano <= m.ano_referencia).pop();
+    const penPrev = penData.filter(p => p.ano === penLast.ano - 1).pop();
     const penGrowth = penLast && penPrev ? (penLast.penetracao - penPrev.penetracao).toFixed(1) : '?';
+    const labelSuffix = mercadoAlvoAtivo ? ' (Merc. Alvo)' : '';
 
     document.getElementById('kpi-mercado').innerHTML = `
         <div class="kpi-card">
             <div class="kpi-value">${penLast.penetracao}%</div>
-            <div class="kpi-label">Penetração GD (${penLast.ano})</div>
+            <div class="kpi-label">Penetração GD${labelSuffix} (${penLast.ano})</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-value">+${penGrowth}pp</div>
@@ -1295,6 +1512,90 @@ function renderMercado() {
             <div class="kpi-label">Mercado Livre</div>
         </div>
     `;
+}
+
+function renderPenetracaoCharts() {
+    const m = DATA.mercado;
+    const penMensal = mercadoAlvoAtivo ? m.penetracao_alvo_mensal : m.penetracao_mensal;
+    const penDist = mercadoAlvoAtivo ? m.penetracao_alvo_dist : m.penetracao_dist;
+    const labelSuffix = mercadoAlvoAtivo ? ' (Mercado Alvo)' : '';
+
+    // Destroy and re-create penetração charts
+    if (charts.penetracao) { charts.penetracao.destroy(); charts.penetracao = null; }
+    if (charts.penetracaoDist) { charts.penetracaoDist.destroy(); charts.penetracaoDist = null; }
+
+    // Penetração mensal
+    const penMensalSampled = penMensal.filter((_, i) => i % 2 === 0 || i === penMensal.length - 1);
+    charts.penetracao = new Chart(document.getElementById('chart-penetracao'), {
+        type: 'line',
+        data: {
+            labels: penMensalSampled.map(p => p.periodo),
+            datasets: [{
+                label: 'Penetração GD' + labelSuffix + ' (%)',
+                data: penMensalSampled.map(p => p.penetracao),
+                borderColor: mercadoAlvoAtivo ? '#f59e0b' : '#00d4aa',
+                backgroundColor: (mercadoAlvoAtivo ? '#f59e0b' : '#00d4aa') + '20',
+                fill: true, tension: 0.3, pointRadius: 1,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => `Penetração: ${ctx.raw}%` } },
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 20, maxRotation: 45 } },
+                y: { title: { display: true, text: '% do consumo regulado' }, min: 0 },
+            },
+        }
+    });
+
+    // Update chart title
+    document.getElementById('chart-penetracao').closest('.chart-box').querySelector('.chart-title').textContent =
+        'Penetração da GD' + labelSuffix + ' — % do Consumo Regulado Atendido por GD';
+
+    // Penetração por distribuidora
+    const penEvo = penDist.evolucao.filter(r => r.ano <= m.ano_referencia);
+    charts.penetracaoDist = new Chart(document.getElementById('chart-penetracao-dist'), {
+        type: 'line',
+        data: {
+            labels: penEvo.map(r => r.ano),
+            datasets: penDist.siglas.slice(0, 10).map((sigla, i) => ({
+                label: sigla,
+                data: penEvo.map(r => r[sigla] || 0),
+                borderColor: COLORS[i],
+                tension: 0.3, pointRadius: 3,
+            }))
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: { y: { title: { display: true, text: '% penetração' }, min: 0 } },
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12 } },
+                tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}%` } },
+            }
+        }
+    });
+
+    document.getElementById('chart-penetracao-dist').closest('.chart-box').querySelector('.chart-title').textContent =
+        'Penetração da GD' + labelSuffix + ' por Distribuidora (Top 15)';
+}
+
+function renderMercado() {
+    const m = DATA.mercado;
+    const MCOLORS = {
+        'Mercado Cativo': '#3b82f6',
+        'Mercado Livre': '#8b5cf6',
+        'GD Compensada': '#00d4aa',
+        'GD Injetada': '#f59e0b',
+        'GD Consumo Próprio': '#14b8a6',
+        'Outros': '#64748b',
+    };
+
+    // KPIs
+    renderMercadoKPIs();
 
     // Proporção anual (stacked bar 100%)
     const propAnual = m.proporcao_anual.filter(p => p.ano <= m.ano_referencia);
@@ -1382,67 +1683,8 @@ function renderMercado() {
         }
     });
 
-    // === Penetração da GD ===
-    // Evolução anual + mensal combinada
-    const penAnual = m.penetracao_anual.filter(p => p.ano <= m.ano_referencia);
-    const penMensal = m.penetracao_mensal;
-    const penMensalSampled = penMensal.filter((_, i) => i % 2 === 0 || i === penMensal.length - 1);
-    charts.penetracao = new Chart(document.getElementById('chart-penetracao'), {
-        type: 'line',
-        data: {
-            labels: penMensalSampled.map(p => p.periodo),
-            datasets: [{
-                label: 'Penetração GD (%)',
-                data: penMensalSampled.map(p => p.penetracao),
-                borderColor: '#00d4aa',
-                backgroundColor: '#00d4aa20',
-                fill: true,
-                tension: 0.3,
-                pointRadius: 1,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: { callbacks: { label: ctx => `Penetração: ${ctx.raw}%` } },
-            },
-            scales: {
-                x: { ticks: { maxTicksLimit: 20, maxRotation: 45 } },
-                y: { title: { display: true, text: '% do consumo regulado' }, min: 0 },
-            },
-        }
-    });
-
-    // Penetração por distribuidora (top 15)
-    const penDist = m.penetracao_dist;
-    const penEvo = penDist.evolucao.filter(r => r.ano <= m.ano_referencia);
-    charts.penetracaoDist = new Chart(document.getElementById('chart-penetracao-dist'), {
-        type: 'line',
-        data: {
-            labels: penEvo.map(r => r.ano),
-            datasets: penDist.siglas.slice(0, 10).map((sigla, i) => ({
-                label: sigla,
-                data: penEvo.map(r => r[sigla] || 0),
-                borderColor: COLORS[i],
-                tension: 0.3,
-                pointRadius: 3,
-            }))
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            scales: {
-                y: { title: { display: true, text: '% penetração' }, min: 0 },
-            },
-            plugins: {
-                legend: { position: 'bottom', labels: { boxWidth: 12 } },
-                tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}%` } },
-            }
-        }
-    });
+    // === Penetração da GD (delegada para função reutilizável) ===
+    renderPenetracaoCharts();
 
     // GD por classe de consumo
     const classesGD = m.classes_gd.slice(0, 8);
@@ -1495,12 +1737,41 @@ function renderMercado() {
     // Ano referência label
     document.getElementById('mercado-ano-ref').textContent = m.ano_referencia;
 
+    // Build UF map for mercado distribuidoras (from GD dist_uf_map by matching nome↔sigla)
+    const gdDistUfMap = DATA.resumo.dist_uf_map || {};
+    // Map sigla → UF using nome match
+    const mercDistUfMap = {};
+    const gdDistNames = Object.keys(gdDistUfMap);
+    m.distribuidoras.forEach(d => {
+        // Try to find matching full name in gdDistUfMap
+        const match = gdDistNames.find(n => n.toUpperCase().startsWith(d.sigla.toUpperCase()) || d.nome.toUpperCase().includes(d.sigla.toUpperCase()));
+        if (match) mercDistUfMap[d.sigla] = gdDistUfMap[match];
+        // Also try matching by sigla contained in nome
+        if (!mercDistUfMap[d.sigla]) {
+            const match2 = gdDistNames.find(n => n.toUpperCase().includes(d.sigla.toUpperCase()));
+            if (match2) mercDistUfMap[d.sigla] = gdDistUfMap[match2];
+        }
+    });
+
+    // Populate mercado distribuidora filter with SAMP siglas
+    const mercDistSel = document.getElementById('filtro-merc-dist');
+    // Clear existing options (keep first)
+    while (mercDistSel.options.length > 1) mercDistSel.remove(1);
+    m.distribuidoras.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.sigla; opt.textContent = d.sigla;
+        mercDistSel.appendChild(opt);
+    });
+
     // Tabela distribuidoras
-    const dists = m.distribuidoras;
+    const allDists = m.distribuidoras;
     function renderTableMercado(data) {
         const tbody = document.querySelector('#table-mercado tbody');
         const maxGWh = data[0]?.total_gwh || 1;
-        tbody.innerHTML = data.map((d, i) => `
+        const penField = mercadoAlvoAtivo ? 'penetracao_alvo' : 'penetracao';
+        tbody.innerHTML = data.map((d, i) => {
+            const pen = d[penField] || 0;
+            return `
             <tr>
                 <td class="num">${i + 1}</td>
                 <td><strong>${d.sigla}</strong></td>
@@ -1513,18 +1784,64 @@ function renderMercado() {
                 <td class="num">${fmtNum(d['GD Compensada'] || 0)}</td>
                 <td class="num">${fmtNum(d['GD Injetada'] || 0)}</td>
                 <td class="num" style="color:${d.pct_gd > 15 ? 'var(--accent)' : d.pct_gd > 8 ? 'var(--accent3)' : 'var(--text)'}">${d.pct_gd}%</td>
-                <td class="num" style="color:${d.penetracao > 25 ? 'var(--accent)' : d.penetracao > 15 ? 'var(--accent3)' : 'var(--text)'}; font-weight:${d.penetracao > 25 ? '700' : '400'}">${d.penetracao}%</td>
-            </tr>
-        `).join('');
+                <td class="num" style="color:${pen > 25 ? 'var(--accent)' : pen > 15 ? 'var(--accent3)' : 'var(--text)'}; font-weight:${pen > 25 ? '700' : '400'}">${pen}%</td>
+            </tr>`;
+        }).join('');
     }
-    renderTableMercado(dists);
 
-    document.getElementById('busca-mercado').addEventListener('input', function() {
-        const q = this.value.toLowerCase();
-        const filtered = q ? dists.filter(d =>
+    function getFilteredMercado() {
+        const uf = document.getElementById('filtro-merc-uf').value;
+        const dist = document.getElementById('filtro-merc-dist').value;
+        const q = document.getElementById('busca-mercado').value.toLowerCase();
+        let filtered = allDists;
+        if (uf) filtered = filtered.filter(d => mercDistUfMap[d.sigla] === uf);
+        if (dist) filtered = filtered.filter(d => d.sigla === dist);
+        if (q) filtered = filtered.filter(d =>
             d.sigla.toLowerCase().includes(q) || d.nome.toLowerCase().includes(q)
-        ) : dists;
-        renderTableMercado(filtered);
+        );
+
+        const badge = document.getElementById('filtro-merc-badge');
+        badge.style.display = (uf || dist) ? 'inline-block' : 'none';
+        badge.textContent = dist || uf || '';
+
+        return filtered;
+    }
+
+    function applyMercFilter() { renderTableMercado(getFilteredMercado()); }
+
+    renderTableMercado(allDists);
+
+    document.getElementById('busca-mercado').addEventListener('input', applyMercFilter);
+    document.getElementById('filtro-merc-uf').addEventListener('change', () => {
+        const uf = document.getElementById('filtro-merc-uf').value;
+        document.getElementById('filtro-merc-dist').value = '';
+        // Filter dist dropdown by UF
+        Array.from(mercDistSel.options).forEach(opt => {
+            if (!opt.value) return;
+            opt.style.display = (!uf || mercDistUfMap[opt.value] === uf) ? '' : 'none';
+        });
+        applyMercFilter();
+    });
+    document.getElementById('filtro-merc-dist').addEventListener('change', applyMercFilter);
+    document.getElementById('filtro-merc-badge').addEventListener('click', () => {
+        document.getElementById('filtro-merc-uf').value = '';
+        document.getElementById('filtro-merc-dist').value = '';
+        Array.from(mercDistSel.options).forEach(opt => opt.style.display = '');
+        applyMercFilter();
+    });
+
+    // Toggle Mercado Alvo
+    const toggleEl = document.getElementById('toggle-alvo');
+    const toggleLabel = document.getElementById('toggle-alvo-label');
+    const toggleInfo = document.getElementById('toggle-alvo-info');
+    toggleEl.addEventListener('click', () => {
+        mercadoAlvoAtivo = !mercadoAlvoAtivo;
+        toggleEl.classList.toggle('active', mercadoAlvoAtivo);
+        toggleLabel.classList.toggle('active', mercadoAlvoAtivo);
+        toggleInfo.style.display = mercadoAlvoAtivo ? 'block' : 'none';
+        renderMercadoKPIs();
+        renderPenetracaoCharts();
+        applyMercFilter();
     });
 }
 
@@ -1584,8 +1901,10 @@ document.querySelectorAll('table').forEach(table => {
 (async function() {
     try {
         await loadAllData();
+        populateFilterDropdowns();
         tabsRendered.add('visao-geral');
         renderVisaoGeral();
+        setupVisaoGeralFilters();
     } catch(err) {
         document.querySelector('.content').innerHTML = `
             <div class="loading" style="animation:none">
